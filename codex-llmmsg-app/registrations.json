@@ -1,0 +1,17 @@
+{
+  "sh-ca": {
+    "threadId": "019d40f5-a34b-7c61-8051-eb446d14566b",
+    "registeredAt": "2026-03-30T23:10:52.869Z",
+    "cwd": null
+  },
+  "pluto-audit-ca": {
+    "threadId": "019cef54-c1fd-7a11-9d26-4a052fa1ddb1",
+    "registeredAt": "2026-03-30T23:04:44.578Z",
+    "cwd": null
+  },
+  "mars-audit-ca": {
+    "threadId": "019d3c6a-39bf-7811-bcbb-66bc006ed6fa",
+    "registeredAt": "2026-03-30T23:06:47.289Z",
+    "cwd": null
+  }
+}
