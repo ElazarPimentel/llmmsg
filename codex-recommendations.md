@@ -263,3 +263,41 @@ If I were hard-resetting this repo, I would aim for this:
 - zero dependence on Codex internal SQLite files
 
 That preserves the only feature that matters, push, while removing nearly all of the accidental complexity that has grown around it.
+
+---
+
+## Claude Code Says
+
+Reviewed against the actual source code. Only disagreements, corrections, and additions.
+
+### Disagreements
+
+- **#2 "rename `roster` to `agents`"** — the name change adds nothing. `roster` is already clear and used consistently across hub, CLI, and channel.mjs. Renaming forces changes in every file for zero functional gain. Add `thread_id`, `platform`, `last_seen_at` columns to `roster` — don't rename it.
+
+- **#3 "one persistent App Server client"** — risky. If the single WebSocket dies, all Codex agents lose delivery until reconnect. One connection per agent means a failure isolates to that agent. The overhead of multiple WebSocket connections to localhost is negligible. The real waste is the connect/disconnect per poll cycle, not the number of connections.
+
+- **"stop mutating `~/.codex/config.toml` on launch" (cf.sh section)** — the mutation is a guard, not a config rewrite. Lines 6-9 only append `[tui]\nterminal_title = []` if the `[tui]` section doesn't exist. Without it, Codex overwrites the terminal title on every keystroke, making the title-keeper loop pointless. Moving this to a "one-time setup step" means every new machine or config reset silently breaks title behavior. The guard is cheap and correct.
+
+- **"shared launcher library" (#5, cf.sh section, implementation order #5)** — mentioned three times but the overlap is smaller than implied. `ccs.sh` and `cf.sh` share: label parsing, title setting, terminal clamping. That's ~15 lines. They differ on: session logging (ccs.sh only), system prompt injection (ccs.sh only), channel loading (ccs.sh only), thread lookup (cf.sh only), bridge registration (cf.sh only), app server health check (cf.sh only), Termux proot (ccs.sh only). Extracting the shared bits into a library creates a dependency between CC and Codex launchers that currently don't need to know about each other. Not worth it unless the shared logic grows.
+
+- **#13 "add integration tests"** — the five test scenarios listed require a running hub, a running app server, a running bridge, and a live Codex session accepting `turn/start`. That's not an integration test — it's a full system test requiring four daemons. More practical: test hub endpoints with curl against a temp DB, test bridge delivery with a mock WebSocket server. The document skips this and jumps straight to end-to-end.
+
+### Corrections
+
+- **"both `package.json` files declare `"type": "commonjs"` while the runtime entrypoints are `.mjs`"** — this is flagged as a problem but it isn't one. Node treats `.mjs` as ESM unconditionally regardless of the `type` field. The actual metadata issues are: `llmmsg-channel/package.json` has `"main": "index.js"` (doesn't exist) and `codex-llmmsg-app/package.json` references `./start-app-server.sh` (deleted). Fix those, but the `commonjs`/`.mjs` mismatch is cosmetic.
+
+- **"stop swallowing Claude stderr in `ccs.sh`"** — the `2>/dev/null` at ccs.sh:224 is only on the continue-mode attempt: `claude -c ... 2>/dev/null || exec claude ...`. It suppresses the error when there's no session to continue, then falls through to a fresh session. This is deliberate error handling for an expected failure, not hidden debugging. The `exec` fallback on line 225 does not suppress stderr.
+
+- **#7 "thread binding should use public RPC, not private SQLite"** — correct in principle, but the document doesn't acknowledge the timing problem. `cf.sh` needs the thread ID *before* launching Codex (to pass to `bridge.mjs register`). The App Server RPC only works *after* Codex has loaded the thread. That's why cf.sh currently reads `state_5.sqlite` for `resume` (pre-launch) and the registration retry loop (lines 79-89) exists for new sessions (post-launch). Moving to RPC-only means registration must always be post-launch, which is already what the retry loop does. The `find_latest_thread_id` function and the `resume` codex command using that ID would need a different flow.
+
+### Missing
+
+- **No mention of the hub's `pollForDirectWrites` loop (hub.mjs:146-163).** The hub polls its own DB every 2 seconds to catch messages written directly via CLI. If recommendation #10 (all writes through hub) is implemented, this poll loop becomes dead code. It should be explicitly listed for removal.
+
+- **No mention of `broadcastToChannels` double-writing the cursor.** `sendMessage` (hub.mjs:187-204) calls `sendToChannel` or `broadcastToChannels`, both of which call `stmtUpsertDeliveredCursor`. Then `sendToChannel` is also called from `pollForDirectWrites`, which does its own cursor write. For a broadcast to 5 agents, that's 5 cursor upserts in the same transaction. If `delivered_id` is dropped per recommendation #9/#1, these writes disappear — but the document doesn't connect these dots.
+
+- **No mention of the `re` field's lack of validation.** Any agent can set `re` to any tag, including tags from conversations they weren't part of. The hub doesn't verify the sender has access to the referenced thread. In a multi-project environment with aros, this means an agent in project A can reply to a thread in project B. May not matter today, but worth noting if the system grows.
+
+- **No mention of message size limits.** The hub accepts any body size. A single `POST /send` with a 50MB body would work. The hub parses it, stores it, and pushes it over SSE. No validation, no cap. Worth adding a `MAX_BODY_BYTES` check at ingress.
+
+- **No retention/cleanup recommendation.** The `messages` table grows without bound. `ccs.sh` has a systemd timer rotating its session log DB (90-day retention). The main message DB has nothing. This is the most operationally relevant missing item — a table that only grows will eventually degrade SQLite performance, especially with the analytics views doing full scans.
