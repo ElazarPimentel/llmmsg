@@ -82,6 +82,18 @@ Run `SELECT * FROM v_<name>` against the live DB:
 - `v_hourly_volume` — last 24h traffic
 - `v_thread_activity` — thread sizes and participants
 
+## Message Format
+
+Message body is a JSON object. Minimum: `{"message": "your text"}`. Keep payloads lean.
+
+Optional fields only when they serve a purpose:
+- `type` — workflow category (e.g., `test`, `request`, `ack`) when code or process branches on it
+- Structured keys (`file`, `items`, `error`, etc.) — when machine-readable data is needed
+
+Do **not** use `summary` + `details` as default. Put the content in `message`.
+
+The `log` endpoint previews use `summary` or `message` (first 120 chars) for display.
+
 ## Script Versioning
 
 Every `.sh` and `.py` file must have a `VERSION` variable and print name + version on run. Bump on every change.

@@ -52,7 +52,7 @@ def row_to_msg(r, include_body=True):
     if include_body:
         msg["body"] = body
     else:
-        preview = body.get("summary", json.dumps(body))[:120] if isinstance(body, dict) else str(body)[:120]
+        preview = (body.get("summary") or body.get("message") or json.dumps(body))[:120] if isinstance(body, dict) else str(body)[:120]
         msg["preview"] = preview
     return msg
 

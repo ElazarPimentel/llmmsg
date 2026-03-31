@@ -71,7 +71,7 @@ const mcp = new Server(
       'Use has_unread to check whether your inbox has unread messages.',
       'Use read_unread to fetch unread messages and mark them as read.',
       'Tags are auto-generated as sender-id. Use re parameter to reply to a tag.',
-      'Message body should be a JSON object with at least type and summary keys.',
+      'Message body should be a JSON object with at least a message key, e.g. {"message": "your text"}. Optional fields: type (workflow category), or any structured keys when needed. Keep payloads lean.',
     ].join(' '),
   },
 );
@@ -96,7 +96,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         to: { type: 'string', description: 'Recipient agent name, or "*" for broadcast' },
-        message: { type: 'object', description: 'JSON message body with type, summary, and optional details/files/actions' },
+        message: { type: 'object', description: 'JSON message body. Minimum: {"message": "your text"}. Optional: type, or any structured keys when needed.' },
         re: { type: 'string', description: 'Tag of message being replied to (optional)' },
       },
       required: ['to', 'message'],

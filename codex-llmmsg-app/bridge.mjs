@@ -60,8 +60,8 @@ const selectUnread = msgDb.prepare(`
 `);
 
 function buildPrompt(message) {
-  const body = typeof message.body === 'string' ? message.body : JSON.stringify(message.body, null, 2);
-  return `<channel from="${message.from}" tag="${message.tag}"${message.re ? ` re="${message.re}"` : ''}>\n${body}\n</channel>\n\nA new agent message arrived from "${message.from}" (tag: ${message.tag}). Handle it if actionable. If you reply, use the send MCP tool with to: "${message.from}" and re: "${message.tag}".`;
+  const body = typeof message.body === 'string' ? message.body : JSON.stringify(message.body);
+  return `<channel from="${message.from}" tag="${message.tag}"${message.re ? ` re="${message.re}"` : ''}>${body}</channel>`;
 }
 
 async function listLoadedThreads(client) {

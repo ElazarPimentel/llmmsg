@@ -451,7 +451,7 @@ const server = http.createServer(async (req, res) => {
       const messages = rows.map(r => {
         if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true };
         let body; try { body = JSON.parse(r.body); } catch { body = r.body; }
-        const preview = typeof body === 'object' ? (body.summary || JSON.stringify(body)).slice(0, 120) : String(body).slice(0, 120);
+        const preview = typeof body === 'object' ? (body.summary || body.message || JSON.stringify(body)).slice(0, 120) : String(body).slice(0, 120);
         return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, preview };
       });
       res.end(JSON.stringify(messages));
