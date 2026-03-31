@@ -299,6 +299,7 @@ function connectToHub() {
         if (line.startsWith('data: ')) {
           try {
             const event = JSON.parse(line.slice(6));
+            console.error(`[llmmsg-channel] PUSH from=${event.from} tag=${event.tag} to=${event.to}`);
             mcp.notification({
               method: 'notifications/claude/channel',
               params: {

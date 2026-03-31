@@ -10,8 +10,18 @@
     "cwd": null
   },
   "mars-audit-ca": {
-    "threadId": "019d4109-8f51-7e73-8ccb-ffde61867408",
-    "registeredAt": "2026-03-31T02:55:45.723Z",
+    "threadId": "019d4155-c5f1-7d91-9478-dfa882289a09",
+    "registeredAt": "2026-03-31T03:18:47.303Z",
+    "cwd": null
+  },
+  "pluto-audit-ca": {
+    "threadId": "019d41e7-02e9-76d0-ad8d-a975494204e7",
+    "registeredAt": "2026-03-31T03:19:12.474Z",
+    "cwd": null
+  },
+  "llmmsh-ca": {
+    "threadId": "019d4155-c5f1-7d91-9478-dfa882289a09",
+    "registeredAt": "2026-03-31T03:49:45.638Z",
     "cwd": null
   }
 }

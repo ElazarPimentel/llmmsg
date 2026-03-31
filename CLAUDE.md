@@ -40,6 +40,14 @@ Service files: `/etc/systemd/system/llmmsg-hub.service`, `llmmsg-bridge.service`
 - `LLMMSG_AGENT` — Agent name for the session (set by cf.sh/cfn.sh)
 - `CODEX_APP_SERVER_URL` — Codex app server URL (default: `ws://127.0.0.1:8788`)
 
+## Critical: Push Delivery Requirements
+
+CC push notifications (`notifications/claude/channel`) require **two things** to work:
+
+1. **`--dangerously-load-development-channels server:llmmsg-channel`** must be passed to the `claude` CLI. Without this flag, CC loads channel.mjs as a regular MCP server — tools work but push notifications are silently ignored. This flag is set in `ccs.sh`. **Do not remove it.**
+
+2. **Hub SSE close handler must compare response objects** (hub.mjs). When a session reconnects, the old TCP connection's close handler can fire late and delete the new connection from the `channels` Map. The close handler must check `channels.get(agent) === res` before deleting. Fixed in hub v1.9.
+
 ## Known Issues
 
 - **Codex `--remote` ignores `-C` flag** — Threads get cwd from the app server's WorkingDirectory, not from `-C`. Workaround: cf.sh sends cwd as initial prompt text.
