@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
 
-const VERSION = '1.8';
+const VERSION = '1.9';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const DB_PATH = process.env.LLMMSG_DB || `${process.env.HOME}/Documents/work/llmmsg/llmmsg.sqlite`;
 
@@ -280,8 +280,13 @@ const server = http.createServer(async (req, res) => {
       console.log(`[connect] ${agent} (${channels.size} connected)`);
 
       req.on('close', () => {
-        channels.delete(agent);
-        console.log(`[disconnect] ${agent} (${channels.size} connected)`);
+        // Only delete if this response is still the active one (not replaced by a newer connection)
+        if (channels.get(agent) === res) {
+          channels.delete(agent);
+          console.log(`[disconnect] ${agent} (${channels.size} connected)`);
+        } else {
+          console.log(`[disconnect] ${agent} (stale, ignored — newer connection exists)`);
+        }
       });
       return;
     }
