@@ -58,6 +58,10 @@ node --check codex-llmmsg-app/bridge.mjs   # syntax check
 
 No automated tests. Smoke test: register → send → read_unread with a live hub.
 
+## MCP Reference
+
+For Codex-compatible local MCP server design and configuration, consult `docs/codex-mcp-local-servers-reference.md`. It summarizes the official OpenAI Codex MCP, config, AGENTS.md, and Docs MCP documentation as of 2026-03-30.
+
 ## DB Analytics Views
 
 Run `SELECT * FROM v_<name>` against the live DB:
