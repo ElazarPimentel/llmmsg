@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
 
-const VERSION = '1.3';
+const VERSION = '1.4';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_URL = `http://127.0.0.1:${HUB_PORT}`;
 const AGENT_CWD = process.env.LLMMSG_CWD || process.cwd();
@@ -268,9 +268,22 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
 // Connect MCP to Claude Code via stdio
 await mcp.connect(new StdioServerTransport());
 
+// Auto-register if LLMMSG_AGENT is set (avoids gap between startup and manual register call)
+if (currentAgent) {
+  httpPost('/register', { agent: currentAgent, cwd: AGENT_CWD, old_agent: null })
+    .then(result => {
+      if (result.ok) {
+        console.error(`[llmmsg-channel] auto-registered as ${currentAgent}`);
+      } else {
+        console.error(`[llmmsg-channel] auto-register failed:`, JSON.stringify(result));
+      }
+    })
+    .catch(err => console.error(`[llmmsg-channel] auto-register error: ${err.message}`));
+}
+
 // Connect to hub via SSE for push delivery
 function connectToHub() {
-  const agentParam = currentAgent || 'unregistered';
+  const agentParam = currentAgent || `unregistered-${Math.random().toString(36).slice(2, 8)}`;
   const url = `${HUB_URL}/connect?agent=${encodeURIComponent(agentParam)}&cwd=${encodeURIComponent(AGENT_CWD)}`;
 
   http.get(url, (res) => {
