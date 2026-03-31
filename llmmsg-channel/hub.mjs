@@ -7,9 +7,9 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
 
-const VERSION = '1.9';
+const VERSION = '2.0';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
-const DB_PATH = process.env.LLMMSG_DB || `${process.env.HOME}/Documents/work/llmmsg/llmmsg.sqlite`;
+const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
 
 if (!existsSync(DB_PATH)) {
   console.error(`DB not found: ${DB_PATH}`);
@@ -41,6 +41,13 @@ db.exec(`
     agent         TEXT PRIMARY KEY,
     cwd           TEXT NOT NULL,
     registered_at TEXT NOT NULL DEFAULT (strftime('%s','now'))
+  );
+  CREATE TABLE IF NOT EXISTS thread_map (
+    agent      TEXT NOT NULL,
+    cwd        TEXT NOT NULL,
+    thread_id  TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
+    PRIMARY KEY (agent, cwd)
   );
   CREATE INDEX IF NOT EXISTS idx_recv ON messages(recipient, id);
   CREATE TABLE IF NOT EXISTS aros (
@@ -133,6 +140,8 @@ const stmtAroList = db.prepare(`SELECT aro, agent FROM aros ORDER BY aro, agent`
 const stmtAroJoin = db.prepare(`INSERT OR IGNORE INTO aros (aro, agent) VALUES (?, ?)`);
 const stmtAroLeave = db.prepare(`DELETE FROM aros WHERE aro = ? AND agent = ?`);
 const stmtAroByAgent = db.prepare(`SELECT aro FROM aros WHERE agent = ? ORDER BY aro`);
+const stmtUnregister = db.prepare(`DELETE FROM roster WHERE agent = ?`);
+const stmtDeleteAroByAgent = db.prepare(`DELETE FROM aros WHERE agent = ?`);
 
 // Connected channel sessions: agent name → SSE response
 const channels = new Map();
@@ -338,6 +347,25 @@ const server = http.createServer(async (req, res) => {
       }
 
       res.end(JSON.stringify({ ok: true, agent }));
+      return;
+    }
+
+    // Unregister agent(s): remove from roster, aros, and disconnect SSE
+    if (req.method === 'POST' && path === '/unregister') {
+      const body = await parseBody(req);
+      const agents = Array.isArray(body.agents) ? body.agents.map(a => a.toLowerCase()) : [(body.agent || '').toLowerCase()];
+      const removed = [];
+      for (const agent of agents) {
+        if (!agent) continue;
+        const existed = stmtCheckRoster.get(agent);
+        if (existed) {
+          stmtUnregister.run(agent);
+          stmtDeleteAroByAgent.run(agent);
+          removed.push(agent);
+          console.log(`[unregister] ${agent}`);
+        }
+      }
+      res.end(JSON.stringify({ ok: true, removed }));
       return;
     }
 

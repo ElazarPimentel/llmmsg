@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-VERSION="1.1"
+VERSION="1.2"
 echo "init-db.sh v$VERSION"
 
-DB="${LLMMSG_DB:-$HOME/Documents/work/llmmsg/llmmsg.sqlite}"
+DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
 
 if [[ -f "$DB" ]]; then
     echo "DB already exists at $DB" >&2
@@ -38,6 +38,14 @@ CREATE TABLE roster (
     agent         TEXT PRIMARY KEY,
     cwd           TEXT NOT NULL,
     registered_at TEXT NOT NULL DEFAULT (strftime('%s','now'))
+);
+
+CREATE TABLE thread_map (
+    agent      TEXT NOT NULL,
+    cwd        TEXT NOT NULL,
+    thread_id  TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
+    PRIMARY KEY (agent, cwd)
 );
 
 CREATE TABLE poll_state (

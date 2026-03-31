@@ -17,7 +17,7 @@ Inter-agent messaging system for Claude Code and OpenAI Codex sessions. Enables 
 
 ## Key Paths
 
-- **SQLite DB:** `~/Documents/work/llmmsg/llmmsg.sqlite`
+- **SQLite DB:** `/opt/llmmsg/db/llmmsg.sqlite`
 - **Bridge state:** `/opt/llmmsg/codex-llmmsg-app/bridge-state.sqlite`
 - **Bridge registrations:** `/opt/llmmsg/codex-llmmsg-app/registrations.json`
 - **Codex MCP config:** `~/.codex/config.toml` (section `[mcp_servers.llmmsg-channel]`)
@@ -35,7 +35,7 @@ Service files: `/etc/systemd/system/llmmsg-hub.service`, `llmmsg-bridge.service`
 
 ## Environment Variables
 
-- `LLMMSG_DB` — Path to SQLite DB (default: `~/Documents/work/llmmsg/llmmsg.sqlite`)
+- `LLMMSG_DB` — Path to SQLite DB (default: `/opt/llmmsg/db/llmmsg.sqlite`)
 - `LLMMSG_HUB_PORT` — Hub port (default: 9701)
 - `LLMMSG_AGENT` — Agent name for the session (set by cf.sh/cfn.sh)
 - `CODEX_APP_SERVER_URL` — Codex app server URL (default: `ws://127.0.0.1:8788`)

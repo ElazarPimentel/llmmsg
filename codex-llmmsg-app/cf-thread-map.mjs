@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 
-import os from 'node:os';
-import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { existsSync } from 'node:fs';
+import path from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import Database from 'better-sqlite3';
 import { CodexRpcClient } from './rpc-client.mjs';
 
-const MAP_DB_PATH = process.env.CF_THREAD_MAP_DB || path.join(os.homedir(), '.codex', 'cf-thread-map.sqlite');
+const MESSAGE_DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
 const APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || 'ws://127.0.0.1:8788';
 const BRIDGE_SHIM = '/opt/llmmsg/codex-llmmsg-app/bridge.mjs';
 
-const db = new Database(MAP_DB_PATH);
+mkdirSync(path.dirname(MESSAGE_DB_PATH), { recursive: true });
+
+const db = new Database(MESSAGE_DB_PATH);
 db.exec(`
   CREATE TABLE IF NOT EXISTS thread_map (
     agent TEXT NOT NULL,

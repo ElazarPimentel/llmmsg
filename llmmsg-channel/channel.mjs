@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
 
-const VERSION = '1.4';
+const VERSION = '1.5';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_URL = `http://127.0.0.1:${HUB_PORT}`;
 const AGENT_CWD = process.env.LLMMSG_CWD || process.cwd();
@@ -160,6 +160,17 @@ const TOOLS = [
     },
   },
   {
+    name: 'unregister',
+    description: 'Remove one or more agents from the roster. Use to clean up stale or misnamed registrations.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agents: { type: 'array', items: { type: 'string' }, description: 'List of agent names to remove from roster' },
+      },
+      required: ['agents'],
+    },
+  },
+  {
     name: 'has_unread',
     description: 'Return the unread message count for your registered agent name.',
     inputSchema: { type: 'object', properties: {} },
@@ -203,6 +214,10 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
           re: args.re || null,
           message: args.message,
         });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+      case 'unregister': {
+        const result = await httpPost('/unregister', { agents: args.agents });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
       case 'aro_list': {

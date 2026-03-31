@@ -12,14 +12,14 @@ Usage:
   llmmsg-cli.py log [limit]
   llmmsg-cli.py agents
 """
-VERSION = "2.2"
+VERSION = "2.3"
 
 import sqlite3
 import sys
 import os
 import json
 
-DB = os.environ.get("LLMMSG_DB", os.path.expanduser("~/Documents/work/llmmsg/llmmsg.sqlite"))
+DB = os.environ.get("LLMMSG_DB", "/opt/llmmsg/db/llmmsg.sqlite")
 
 
 def get_db():
