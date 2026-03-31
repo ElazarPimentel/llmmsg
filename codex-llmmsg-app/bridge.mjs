@@ -89,6 +89,7 @@ async function registerAgent(agent, { threadId, cwd, latest } = {}) {
     }
     let filtered = threads;
     if (cwd) filtered = filtered.filter((thread) => thread.cwd === cwd);
+    if (!filtered.length) filtered = threads;
     filtered.sort((a, b) => b.updatedAt - a.updatedAt);
     if (!filtered.length) {
       throw new Error('no loaded thread matches registration query');
