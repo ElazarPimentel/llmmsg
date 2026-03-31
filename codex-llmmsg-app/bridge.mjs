@@ -5,7 +5,7 @@ import Database from 'better-sqlite3';
 import { CodexRpcClient } from './rpc-client.mjs';
 
 const HOME = process.env.HOME;
-const APP_DIR = path.join(HOME, 'Documents/terminal/codex-llmmsg-app');
+const APP_DIR = path.dirname(new URL(import.meta.url).pathname);
 const REGISTRY_PATH = path.join(APP_DIR, 'registrations.json');
 const STATE_DB = path.join(APP_DIR, 'bridge-state.sqlite');
 const MESSAGE_DB = process.env.LLMMSG_DB || path.join(HOME, 'Documents/work/llmmsg/llmmsg.sqlite');
