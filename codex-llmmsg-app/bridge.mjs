@@ -36,11 +36,12 @@ const setCursor = stateDb.prepare(`
 
 const HUB_URL = process.env.LLMMSG_HUB_URL || 'http://127.0.0.1:9701';
 
-async function hubReadAck(agent, throughId) {
-  const { default: https } = await import(HUB_URL.startsWith('https') ? 'node:https' : 'node:http');
+import http from 'node:http';
+
+function hubReadAck(agent, throughId) {
   const data = JSON.stringify({ agent, through_id: throughId });
   return new Promise((resolve) => {
-    const req = https.request(`${HUB_URL}/read-ack`, {
+    const req = http.request(`${HUB_URL}/read-ack`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
     }, (res) => { res.resume(); resolve(); });
@@ -124,21 +125,26 @@ async function deliverUnread(agent) {
   await client.connect();
 
   let maxId = lastId;
-  for (const row of rows) {
-    if (row.id > maxId) maxId = row.id;
-    let body;
-    try { body = JSON.parse(row.body); } catch { body = row.body; }
-    await client.request('turn/start', {
-      threadId: mapping.threadId,
-      input: [{ type: 'text', text: buildPrompt({ id: row.id, from: row.sender, to: row.recipient, tag: row.tag, re: row.re, body }), text_elements: [] }],
-    });
-  }
+  try {
+    for (const row of rows) {
+      if (row.id > maxId) maxId = row.id;
+      let body;
+      try { body = JSON.parse(row.body); } catch { body = row.body; }
+      await client.request('turn/start', {
+        threadId: mapping.threadId,
+        input: [{ type: 'text', text: buildPrompt({ id: row.id, from: row.sender, to: row.recipient, tag: row.tag, re: row.re, body }), text_elements: [] }],
+      });
+    }
 
-  setCursor.run(agent, maxId);
-  await hubReadAck(agent, maxId);
-  await client.close();
+    setCursor.run(agent, maxId);
+    await hubReadAck(agent, maxId);
+  } finally {
+    await client.close();
+  }
   return { delivered: rows.length, lastId: maxId };
 }
+
+const staleErrors = new Map(); // agent → consecutive error count
 
 async function watchAgents(pollMs = 2000) {
   for (;;) {
@@ -149,8 +155,20 @@ async function watchAgents(pollMs = 2000) {
         if (result.delivered > 0) {
           process.stdout.write(`[delivered] ${agent}: ${result.delivered}\n`);
         }
+        staleErrors.delete(agent);
       } catch (error) {
-        process.stderr.write(`[error] ${agent}: ${error.message}\n`);
+        const count = (staleErrors.get(agent) || 0) + 1;
+        staleErrors.set(agent, count);
+        const isThreadGone = /thread.*(not found|does not exist)/i.test(error.message);
+        if (isThreadGone || count >= 10) {
+          process.stderr.write(`[unregister] ${agent}: ${count} consecutive errors (${error.message}), removing\n`);
+          const reg = loadRegistry();
+          delete reg[agent];
+          saveRegistry(reg);
+          staleErrors.delete(agent);
+        } else {
+          process.stderr.write(`[error] ${agent} (${count}/10): ${error.message}\n`);
+        }
       }
     }
     await new Promise((resolve) => setTimeout(resolve, pollMs));

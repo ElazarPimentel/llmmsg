@@ -1,37 +1,22 @@
 {
-  "sh-ca": {
-    "threadId": "019d4144-3154-73b2-8075-c9ea82b55d16",
-    "registeredAt": "2026-03-31T00:33:44.988Z",
-    "cwd": "/home/rob/Documents/terminal/sh"
-  },
   "llmmsg-ca": {
     "threadId": "019d4155-c5f1-7d91-9478-dfa882289a09",
-    "registeredAt": "2026-04-01T01:50:12.224Z",
+    "registeredAt": "2026-04-01T02:48:10.788Z",
     "cwd": null
   },
   "pluto-audit-ca": {
     "threadId": "019d41e7-02e9-76d0-ad8d-a975494204e7",
-    "registeredAt": "2026-04-01T01:50:31.440Z",
+    "registeredAt": "2026-04-01T02:54:11.055Z",
     "cwd": null
   },
   "pluto-pm-ca": {
     "threadId": "019d421a-488a-7731-9f13-497403f975d8",
-    "registeredAt": "2026-04-01T01:50:27.994Z",
+    "registeredAt": "2026-04-01T02:54:21.606Z",
     "cwd": null
   },
   "mars-audit-ca": {
     "threadId": "019d421c-c7e8-77b1-88c7-9f1cc506aa39",
-    "registeredAt": "2026-04-01T01:46:38.740Z",
-    "cwd": null
-  },
-  "draandreaesparza-com-ca": {
-    "threadId": "019d4232-dce3-7f80-a4b1-c1d730854da2",
-    "registeredAt": "2026-03-31T04:42:03.452Z",
-    "cwd": null
-  },
-  "llmsg-ca": {
-    "threadId": "019d466a-5345-7901-b4e1-53a79b33ccea",
-    "registeredAt": "2026-04-01T00:21:07.505Z",
+    "registeredAt": "2026-04-01T02:53:59.543Z",
     "cwd": null
   }
 }
