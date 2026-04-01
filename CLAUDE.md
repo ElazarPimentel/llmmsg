@@ -94,6 +94,8 @@ Do **not** use `summary` + `details` as default. Put the content in `message`.
 
 The `log` endpoint previews use `summary` or `message` (first 120 chars) for display.
 
+For full messaging guidelines (anti-patterns, when long messages are fine), see `llm-message-guide.md`.
+
 ## Script Versioning
 
 Every `.sh` and `.py` file must have a `VERSION` variable and print name + version on run. Bump on every change.
