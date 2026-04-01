@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="1.0"
+VERSION="1.1"
 echo "daily-comms-audit.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -107,3 +107,25 @@ sqlite3 "$DB" "
     )
   );
 "
+
+# Write per-agent metrics to audit_snapshots
+GUIDE_VERSION=$(sqlite3 "$DB" "SELECT version FROM config WHERE key = 'message_guide';" 2>/dev/null || echo "unknown")
+
+sqlite3 "$DB" "
+  INSERT INTO audit_snapshots (guide_version, agent, msgs, avg_chars, total_chars, est_tokens, over_2k, has_dup_fields)
+  SELECT
+    '$GUIDE_VERSION',
+    sender,
+    COUNT(*),
+    ROUND(AVG(LENGTH(body))),
+    SUM(LENGTH(body)),
+    ROUND(SUM(LENGTH(body)) / 4.0),
+    SUM(CASE WHEN LENGTH(body) > 2000 THEN 1 ELSE 0 END),
+    SUM(CASE WHEN json_extract(body, '$.summary') IS NOT NULL AND (json_extract(body, '$.details') IS NOT NULL OR json_extract(body, '$.message') IS NOT NULL) THEN 1 ELSE 0 END)
+  FROM messages
+  WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+    AND retracted_at IS NULL
+  GROUP BY sender;
+"
+echo ""
+echo "Audit snapshot saved (guide v$GUIDE_VERSION)"

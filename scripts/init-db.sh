@@ -53,6 +53,26 @@ CREATE TABLE poll_state (
     empty_since TEXT
 );
 
+CREATE TABLE config (
+    key        TEXT PRIMARY KEY,
+    value      TEXT NOT NULL,
+    version    TEXT NOT NULL DEFAULT '1.0',
+    updated_at TEXT NOT NULL DEFAULT (strftime('%s','now'))
+);
+
+CREATE TABLE audit_snapshots (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts         TEXT NOT NULL DEFAULT (strftime('%s','now')),
+    guide_version TEXT NOT NULL,
+    agent      TEXT NOT NULL,
+    msgs       INTEGER NOT NULL DEFAULT 0,
+    avg_chars  REAL NOT NULL DEFAULT 0,
+    total_chars INTEGER NOT NULL DEFAULT 0,
+    est_tokens REAL NOT NULL DEFAULT 0,
+    over_2k    INTEGER NOT NULL DEFAULT 0,
+    has_dup_fields INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE aros (
     aro   TEXT NOT NULL,
     agent TEXT NOT NULL,

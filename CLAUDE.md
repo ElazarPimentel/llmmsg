@@ -94,7 +94,7 @@ Do **not** use `summary` + `details` as default. Put the content in `message`.
 
 The `log` endpoint previews use `summary` or `message` (first 120 chars) for display.
 
-For full messaging guidelines (anti-patterns, when long messages are fine), see `llm-message-guide.md`.
+For full messaging guidelines, agents can call the `guide` MCP tool or fetch from hub `/guide` endpoint.
 
 ## Script Versioning
 

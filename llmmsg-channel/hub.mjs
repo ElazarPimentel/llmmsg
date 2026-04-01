@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
 
-const VERSION = '2.0';
+const VERSION = '2.1';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
 
@@ -142,6 +142,11 @@ const stmtAroLeave = db.prepare(`DELETE FROM aros WHERE aro = ? AND agent = ?`);
 const stmtAroByAgent = db.prepare(`SELECT aro FROM aros WHERE agent = ? ORDER BY aro`);
 const stmtUnregister = db.prepare(`DELETE FROM roster WHERE agent = ?`);
 const stmtDeleteAroByAgent = db.prepare(`DELETE FROM aros WHERE agent = ?`);
+const stmtGetConfig = db.prepare(`SELECT value, version, updated_at FROM config WHERE key = ?`);
+const stmtSetConfig = db.prepare(
+  `INSERT INTO config (key, value, version, updated_at) VALUES (?, ?, ?, strftime('%s','now'))
+   ON CONFLICT(key) DO UPDATE SET value = excluded.value, version = excluded.version, updated_at = strftime('%s','now')`
+);
 
 // Connected channel sessions: agent name → SSE response
 const channels = new Map();
@@ -519,6 +524,27 @@ const server = http.createServer(async (req, res) => {
       if (!aro || !agent) { res.writeHead(400); res.end(JSON.stringify({ error: 'missing aro or agent' })); return; }
       stmtAroLeave.run(aro, agent);
       res.end(JSON.stringify({ ok: true, aro, agent }));
+      return;
+    }
+
+    // Guide: fetch or update messaging policy
+    if (req.method === 'GET' && path === '/guide') {
+      const row = stmtGetConfig.get('message_guide');
+      if (!row) { res.writeHead(404); res.end(JSON.stringify({ error: 'no guide configured' })); return; }
+      res.end(JSON.stringify({ guide: row.value, version: row.version, updated_at: row.updated_at }));
+      return;
+    }
+
+    if (req.method === 'POST' && path === '/guide') {
+      const body = await parseBody(req);
+      if (!body.guide || !body.version) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: 'missing guide or version' }));
+        return;
+      }
+      stmtSetConfig.run('message_guide', body.guide, body.version);
+      console.log(`[guide] updated to v${body.version}`);
+      res.end(JSON.stringify({ ok: true, version: body.version }));
       return;
     }
 

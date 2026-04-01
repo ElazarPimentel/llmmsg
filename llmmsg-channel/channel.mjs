@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
 
-const VERSION = '1.5';
+const VERSION = '1.6';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_URL = `http://127.0.0.1:${HUB_PORT}`;
 const AGENT_CWD = process.env.LLMMSG_CWD || process.cwd();
@@ -171,6 +171,11 @@ const TOOLS = [
     },
   },
   {
+    name: 'guide',
+    description: 'Fetch the current messaging guide (anti-patterns for efficient agent communication).',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
     name: 'has_unread',
     description: 'Return the unread message count for your registered agent name.',
     inputSchema: { type: 'object', properties: {} },
@@ -252,6 +257,10 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
         const result = await httpGet(`/log?limit=${limit}`);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
+      case 'guide': {
+        const result = await httpGet('/guide');
+        return { content: [{ type: 'text', text: result.guide || JSON.stringify(result) }] };
+      }
       case 'has_unread': {
         if (!currentAgent) {
           return { content: [{ type: 'text', text: JSON.stringify({
@@ -286,9 +295,22 @@ await mcp.connect(new StdioServerTransport());
 // Auto-register if LLMMSG_AGENT is set (avoids gap between startup and manual register call)
 if (currentAgent) {
   httpPost('/register', { agent: currentAgent, cwd: AGENT_CWD, old_agent: null })
-    .then(result => {
+    .then(async (result) => {
       if (result.ok) {
         console.error(`[llmmsg-channel] auto-registered as ${currentAgent}`);
+        // Send guide on first register
+        try {
+          const guide = await httpGet('/guide');
+          if (guide.guide) {
+            mcp.notification({
+              method: 'notifications/claude/channel',
+              params: {
+                content: `Messaging guide v${guide.version}:\n${guide.guide}`,
+                meta: { from: 'system', to: currentAgent, tag: `guide-v${guide.version}` },
+              },
+            });
+          }
+        } catch {}
       } else {
         console.error(`[llmmsg-channel] auto-register failed:`, JSON.stringify(result));
       }
