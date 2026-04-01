@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="1.1"
+VERSION="1.2"
 echo "daily-comms-audit.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -24,9 +24,22 @@ MEDIAN=$(sqlite3 "$DB" "
   LIMIT 1 OFFSET (SELECT n/2 FROM counted);
 ")
 
+# Average avg_chars across agents
+AVERAGE=$(sqlite3 "$DB" "
+  WITH agent_avgs AS (
+    SELECT ROUND(AVG(LENGTH(body))) AS avg_chars
+    FROM messages
+    WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+      AND retracted_at IS NULL
+    GROUP BY sender
+  )
+  SELECT ROUND(AVG(avg_chars)) FROM agent_avgs;
+")
+
 echo ""
 echo "=== Last 24h Communications Audit ==="
 echo "Median avg chars/message: $MEDIAN"
+echo "Average avg chars/message: $AVERAGE"
 echo ""
 
 echo "--- Per-Agent Efficiency ---"
@@ -107,6 +120,55 @@ sqlite3 "$DB" "
     )
   );
 "
+
+# Compare with last audit snapshot
+LAST_AUDIT_TS=$(sqlite3 "$DB" "SELECT MAX(ts) FROM audit_snapshots;" 2>/dev/null)
+if [[ -n "$LAST_AUDIT_TS" && "$LAST_AUDIT_TS" != "" ]]; then
+    LAST_GUIDE=$(sqlite3 "$DB" "SELECT guide_version FROM audit_snapshots WHERE ts = '$LAST_AUDIT_TS' LIMIT 1;")
+    LAST_TIME=$(sqlite3 "$DB" "SELECT datetime($LAST_AUDIT_TS, 'unixepoch', 'localtime');")
+    echo ""
+    echo "--- Comparison vs Last Audit ($LAST_TIME, guide v$LAST_GUIDE) ---"
+    sqlite3 -header -column "$DB" "
+      WITH current AS (
+        SELECT sender,
+          COUNT(*) AS msgs,
+          ROUND(AVG(LENGTH(body))) AS avg_chars,
+          SUM(LENGTH(body)) AS total_chars,
+          ROUND(SUM(LENGTH(body)) / 4.0) AS est_tokens,
+          SUM(CASE WHEN LENGTH(body) > 2000 THEN 1 ELSE 0 END) AS over_2k
+        FROM messages
+        WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+          AND retracted_at IS NULL
+        GROUP BY sender
+      ),
+      prev AS (
+        SELECT agent, msgs, avg_chars, total_chars, est_tokens, over_2k
+        FROM audit_snapshots
+        WHERE ts = '$LAST_AUDIT_TS'
+      )
+      SELECT
+        c.sender AS agent,
+        c.msgs AS msgs_now,
+        COALESCE(p.msgs, 0) AS msgs_prev,
+        c.msgs - COALESCE(p.msgs, 0) AS msgs_delta,
+        c.avg_chars AS avg_now,
+        COALESCE(p.avg_chars, 0) AS avg_prev,
+        ROUND(c.avg_chars - COALESCE(p.avg_chars, 0)) AS avg_delta,
+        c.est_tokens AS tok_now,
+        COALESCE(p.est_tokens, 0) AS tok_prev,
+        ROUND(c.est_tokens - COALESCE(p.est_tokens, 0)) AS tok_delta,
+        c.over_2k AS big_now,
+        COALESCE(p.over_2k, 0) AS big_prev
+      FROM current c
+      LEFT JOIN prev p ON c.sender = p.agent
+      ORDER BY tok_delta DESC;
+    "
+else
+    echo ""
+    echo "--- No previous audit snapshot for comparison ---"
+fi
+
+echo ""
 
 # Write per-agent metrics to audit_snapshots
 GUIDE_VERSION=$(sqlite3 "$DB" "SELECT version FROM config WHERE key = 'message_guide';" 2>/dev/null || echo "unknown")
