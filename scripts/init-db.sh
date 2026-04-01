@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="1.2"
+VERSION="1.3"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -99,7 +99,7 @@ LIMIT 10;
 CREATE VIEW v_largest_messages AS
 SELECT id, sender, recipient, tag, LENGTH(body) AS chars,
   ROUND(LENGTH(body) / 4.0) AS est_tokens,
-  json_extract(body, '$.summary') AS summary
+  COALESCE(json_extract(body, '$.summary'), json_extract(body, '$.message'), json_extract(body, '$.text')) AS preview
 FROM messages
 ORDER BY LENGTH(body) DESC
 LIMIT 20;
@@ -160,6 +160,41 @@ SELECT
 FROM messages
 GROUP BY msg_type
 ORDER BY count DESC;
+
+-- Daily efficiency: last 24h per-agent stats with waste flags
+CREATE VIEW v_daily_efficiency AS
+SELECT
+  sender,
+  COUNT(*) AS msgs,
+  ROUND(AVG(LENGTH(body))) AS avg_chars,
+  MAX(LENGTH(body)) AS max_chars,
+  SUM(LENGTH(body)) AS total_chars,
+  ROUND(SUM(LENGTH(body)) / 4.0) AS est_tokens,
+  SUM(CASE WHEN re IS NOT NULL THEN 1 ELSE 0 END) AS replies,
+  SUM(CASE WHEN re IS NULL THEN 1 ELSE 0 END) AS initiated,
+  ROUND(AVG(CASE WHEN re IS NOT NULL THEN LENGTH(body) END)) AS avg_reply_chars,
+  ROUND(AVG(CASE WHEN re IS NULL THEN LENGTH(body) END)) AS avg_init_chars,
+  SUM(CASE WHEN LENGTH(body) > 2000 THEN 1 ELSE 0 END) AS over_2k,
+  SUM(CASE WHEN json_extract(body, '$.summary') IS NOT NULL AND json_extract(body, '$.details') IS NOT NULL THEN 1 ELSE 0 END) AS has_summary_and_details,
+  SUM(CASE WHEN json_extract(body, '$.summary') IS NOT NULL AND json_extract(body, '$.message') IS NOT NULL THEN 1 ELSE 0 END) AS has_summary_and_message
+FROM messages
+WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+  AND retracted_at IS NULL
+GROUP BY sender
+ORDER BY total_chars DESC;
+
+-- Reply ratio per agent
+CREATE VIEW v_reply_ratio AS
+SELECT
+  sender,
+  COUNT(*) AS total,
+  SUM(CASE WHEN re IS NOT NULL THEN 1 ELSE 0 END) AS replies,
+  SUM(CASE WHEN re IS NULL THEN 1 ELSE 0 END) AS initiated,
+  ROUND(100.0 * SUM(CASE WHEN re IS NOT NULL THEN 1 ELSE 0 END) / COUNT(*), 1) AS reply_pct
+FROM messages
+WHERE retracted_at IS NULL
+GROUP BY sender
+ORDER BY total DESC;
 SQL
 
 echo "Created $DB"
