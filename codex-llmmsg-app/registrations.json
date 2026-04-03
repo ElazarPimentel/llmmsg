@@ -1,17 +1,37 @@
 {
   "pluto-audit-ca": {
     "threadId": "019d41e7-02e9-76d0-ad8d-a975494204e7",
-    "registeredAt": "2026-04-01T02:54:11.055Z",
+    "registeredAt": "2026-04-03T03:46:05.762Z",
     "cwd": null
   },
   "pluto-pm-ca": {
     "threadId": "019d421a-488a-7731-9f13-497403f975d8",
-    "registeredAt": "2026-04-03T03:04:56.699Z",
+    "registeredAt": "2026-04-03T03:46:19.027Z",
     "cwd": null
   },
   "llmmsg-ca": {
     "threadId": "019d4155-c5f1-7d91-9478-dfa882289a09",
-    "registeredAt": "2026-04-03T03:23:20.137Z",
+    "registeredAt": "2026-04-03T03:53:16.254Z",
+    "cwd": null
+  },
+  "mars-audit-ca": {
+    "threadId": "019d421c-c7e8-77b1-88c7-9f1cc506aa39",
+    "registeredAt": "2026-04-03T05:52:05.100Z",
+    "cwd": null
+  },
+  "mars-pm-ca": {
+    "threadId": "019d51f4-5103-7411-a6da-c00d8d4de4ae",
+    "registeredAt": "2026-04-03T06:07:39.892Z",
+    "cwd": null
+  },
+  "mars-coder-ca": {
+    "threadId": "019d51fa-805b-7483-b43a-5b39a0e7d438",
+    "registeredAt": "2026-04-03T06:14:25.231Z",
+    "cwd": null
+  },
+  "pluto-coder-ca": {
+    "threadId": "019d51ff-cb09-76b1-b976-63b1f104059a",
+    "registeredAt": "2026-04-03T06:20:12.050Z",
     "cwd": null
   }
 }

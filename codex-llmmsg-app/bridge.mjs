@@ -102,6 +102,7 @@ async function registerAgent(agent, { threadId, cwd, latest } = {}) {
     threadId: resolvedThreadId,
     registeredAt: new Date().toISOString(),
     cwd: cwd || null,
+    // clear any suspension — registration is always authoritative
   };
   saveRegistry(registry);
   await client.close();
@@ -113,6 +114,9 @@ async function deliverUnread(agent) {
   const mapping = registry[agent];
   if (!mapping) {
     throw new Error(`agent '${agent}' is not registered`);
+  }
+  if (mapping.suspended) {
+    return { delivered: 0, lastId: getCursor.get(agent)?.last_id || 0 };
   }
 
   const lastId = getCursor.get(agent)?.last_id || 0;
@@ -149,7 +153,8 @@ const staleErrors = new Map(); // agent → consecutive error count
 async function watchAgents(pollMs = 2000) {
   for (;;) {
     const registry = loadRegistry();
-    for (const agent of Object.keys(registry)) {
+    for (const [agent, mapping] of Object.entries(registry)) {
+      if (mapping.suspended) continue; // skip until re-registered
       try {
         const result = await deliverUnread(agent);
         if (result.delivered > 0) {
@@ -161,10 +166,16 @@ async function watchAgents(pollMs = 2000) {
         staleErrors.set(agent, count);
         const isThreadGone = /thread.*(not found|does not exist)/i.test(error.message);
         if (isThreadGone || count >= 10) {
-          process.stderr.write(`[unregister] ${agent}: ${count} consecutive errors (${error.message}), removing\n`);
+          // Suspend delivery but keep the registration — the session may restart
+          // and re-register with a new thread ID. Deleting here would lose state.
+          process.stderr.write(`[suspend] ${agent}: ${count} consecutive errors (${error.message}), suspending delivery until re-register\n`);
           const reg = loadRegistry();
-          delete reg[agent];
-          saveRegistry(reg);
+          if (reg[agent]) {
+            reg[agent].suspended = true;
+            reg[agent].suspendedAt = new Date().toISOString();
+            reg[agent].suspendReason = error.message;
+            saveRegistry(reg);
+          }
           staleErrors.delete(agent);
         } else {
           process.stderr.write(`[error] ${agent} (${count}/10): ${error.message}\n`);
