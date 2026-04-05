@@ -21,17 +21,26 @@
   },
   "mars-pm-ca": {
     "threadId": "019d51f4-5103-7411-a6da-c00d8d4de4ae",
-    "registeredAt": "2026-04-03T06:07:39.892Z",
-    "cwd": null
+    "registeredAt": "2026-04-04T02:54:04.790Z",
+    "cwd": null,
+    "suspended": true,
+    "suspendedAt": "2026-04-04T14:48:00.199Z",
+    "suspendReason": "thread not found: 019d51f4-5103-7411-a6da-c00d8d4de4ae"
   },
   "mars-coder-ca": {
     "threadId": "019d51fa-805b-7483-b43a-5b39a0e7d438",
     "registeredAt": "2026-04-03T06:14:25.231Z",
-    "cwd": null
+    "cwd": null,
+    "suspended": true,
+    "suspendedAt": "2026-04-04T01:29:37.333Z",
+    "suspendReason": "thread not found: 019d51fa-805b-7483-b43a-5b39a0e7d438"
   },
   "pluto-coder-ca": {
     "threadId": "019d51ff-cb09-76b1-b976-63b1f104059a",
     "registeredAt": "2026-04-03T06:20:12.050Z",
-    "cwd": null
+    "cwd": null,
+    "suspended": true,
+    "suspendedAt": "2026-04-04T00:54:48.692Z",
+    "suspendReason": "thread not found: 019d51ff-cb09-76b1-b976-63b1f104059a"
   }
 }

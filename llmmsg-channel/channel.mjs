@@ -9,8 +9,9 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
+import { execFileSync } from 'node:child_process';
 
-const VERSION = '1.6';
+const VERSION = '1.7';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_URL = `http://127.0.0.1:${HUB_PORT}`;
 const AGENT_CWD = process.env.LLMMSG_CWD || process.cwd();
@@ -62,16 +63,17 @@ const mcp = new Server(
     instructions: [
       'Messages from other Claude Code agents arrive as <channel source="llmmsg-channel" from="sender" tag="tag" re="re_tag"> tags.',
       'You must be registered before sending. If send returns not_registered, ask the user: "What is my agent name for this session?" then call register.',
-      'Use the send tool to message other agents. Use to:"*" for broadcast.',
+      'Use the send tool to message other agents. Default to aro:{group} for group-wide notices. If you believe a message should go to to:"*", ask user Elazar first. Otherwise send to aro:{group}.',
       'Use the register tool to set your agent name (required once per session, or after name changes).',
       'Use the roster tool to see registered agents.',
       'Use the thread tool to view a conversation thread by tag.',
       'Use the search tool to search message bodies.',
       'Use the log tool to see recent messages.',
-      'Use has_unread to check whether your inbox has unread messages.',
-      'Use read_unread to fetch unread messages and mark them as read.',
+      'Never use sleep, backoff, polling loops, timers, or repeated read checks to wait for llmmsg replies. After sending, stop and wait for push.',
+      'Use has_unread or read_unread only when the user asks, or when you have strong evidence a reply is missing and manual recovery is actually needed. No loops.',
+      'Do not re-register defensively before sends. Register at session start, after a name change, or only after an actual not_registered error.',
       'Tags are auto-generated as sender-id. Use re parameter to reply to a tag.',
-      'Message body should be a JSON object with at least a message key, e.g. {"message": "your text"}. Optional fields: type (workflow category), or any structured keys when needed. Keep payloads lean.',
+      'Message body should be a JSON object with at least a message key, e.g. {"message": "your text"}. Avoid type unless a specific tool or workflow explicitly requires it. Add other structured keys only when machine-readable data is truly needed. Keep payloads lean.',
     ].join(' '),
   },
 );
@@ -96,7 +98,7 @@ const TOOLS = [
       type: 'object',
       properties: {
         to: { type: 'string', description: 'Recipient agent name, or "*" for broadcast' },
-        message: { type: 'object', description: 'JSON message body. Minimum: {"message": "your text"}. Optional: type, or any structured keys when needed.' },
+        message: { type: 'object', description: 'JSON message body. Minimum: {"message": "your text"}. Avoid type unless explicitly required. Add structured keys only when machine-readable data is truly needed.' },
         re: { type: 'string', description: 'Tag of message being replied to (optional)' },
       },
       required: ['to', 'message'],
@@ -370,5 +372,22 @@ function connectToHub() {
     setTimeout(connectToHub, 5000);
   });
 }
+
+// Auto-unregister on clean exit so the agent is removed from AROs and roster.
+// This prevents dead agents from receiving ARO-fanned messages after a session ends.
+function unregisterSync() {
+  if (!currentAgent) return;
+  try {
+    execFileSync('curl', [
+      '-s', '-m', '2',
+      '-X', 'POST', `${HUB_URL}/unregister`,
+      '-H', 'Content-Type: application/json',
+      '-d', JSON.stringify({ agent: currentAgent }),
+    ], { timeout: 3000, stdio: 'ignore' });
+  } catch {}
+}
+
+process.on('SIGTERM', () => { unregisterSync(); process.exit(0); });
+process.on('SIGINT', () => { unregisterSync(); process.exit(0); });
 
 connectToHub();

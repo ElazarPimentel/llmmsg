@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
 
-const VERSION = '2.1';
+const VERSION = '2.2';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
 
@@ -60,6 +60,7 @@ db.exec(`
 for (const columnSql of [
   `ALTER TABLE cursors ADD COLUMN delivered_id INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE cursors ADD COLUMN read_id INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE roster ADD COLUMN last_seen_at INTEGER NOT NULL DEFAULT 0`,
 ]) {
   try {
     db.exec(columnSql);
@@ -114,8 +115,11 @@ const stmtUpsertReadCursor = db.prepare(
 );
 const stmtRoster = db.prepare(`SELECT agent, cwd FROM roster ORDER BY agent`);
 const stmtRegister = db.prepare(
-  `INSERT INTO roster (agent, cwd) VALUES (?, ?)
-   ON CONFLICT(agent) DO UPDATE SET cwd = excluded.cwd, registered_at = strftime('%s','now')`
+  `INSERT INTO roster (agent, cwd, last_seen_at) VALUES (?, ?, strftime('%s','now'))
+   ON CONFLICT(agent) DO UPDATE SET cwd = excluded.cwd, registered_at = strftime('%s','now'), last_seen_at = strftime('%s','now')`
+);
+const stmtUpdateLastSeen = db.prepare(
+  `UPDATE roster SET last_seen_at = strftime('%s','now') WHERE agent = ?`
 );
 const stmtThread = db.prepare(
   `WITH RECURSIVE thread_tags(t) AS (
@@ -135,7 +139,16 @@ const stmtLog = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, retracted_at FROM messages ORDER BY id DESC LIMIT ?`
 );
 const stmtCheckRoster = db.prepare(`SELECT 1 FROM roster WHERE agent = ?`);
-const stmtAroMembers = db.prepare(`SELECT agent FROM aros WHERE aro = ? ORDER BY agent`);
+// ARO fanout only targets agents seen in the last hour (covers bridge-polled Codex agents) or with an active SSE connection.
+// Agents that went offline without unregistering are excluded after 1 hour of inactivity.
+const stmtAroMembersAll = db.prepare(`SELECT agent FROM aros WHERE aro = ? ORDER BY agent`);
+const stmtAroMembersActive = db.prepare(
+  `SELECT a.agent FROM aros a
+   LEFT JOIN roster r ON r.agent = a.agent
+   WHERE a.aro = ?
+     AND (r.last_seen_at > strftime('%s','now') - 3600 OR r.last_seen_at IS NULL)
+   ORDER BY a.agent`
+);
 const stmtAroList = db.prepare(`SELECT aro, agent FROM aros ORDER BY aro, agent`);
 const stmtAroJoin = db.prepare(`INSERT OR IGNORE INTO aros (aro, agent) VALUES (?, ?)`);
 const stmtAroLeave = db.prepare(`DELETE FROM aros WHERE aro = ? AND agent = ?`);
@@ -291,6 +304,7 @@ const server = http.createServer(async (req, res) => {
       res.write(`: connected as ${agent}\n\n`);
 
       channels.set(agent, res);
+      stmtUpdateLastSeen.run(agent); // refresh last_seen_at so ARO fanout keeps this agent active
       console.log(`[connect] ${agent} (${channels.size} connected)`);
 
       req.on('close', () => {
@@ -392,13 +406,16 @@ const server = http.createServer(async (req, res) => {
         }));
         return;
       }
-      // aro fan-out: to: "aro:mars" → send to each member individually
+      // aro fan-out: to: "aro:mars" → send to each active member individually
+      // "active" = has a live SSE connection OR was seen (registered/polled) in the last hour
       if (to.startsWith('aro:')) {
         const aroName = to.slice(4);
-        const members = stmtAroMembers.all(aroName).map(r => r.agent).filter(a => a !== from);
+        const allMembers = stmtAroMembersAll.all(aroName).map(r => r.agent).filter(a => a !== from);
+        const recentMembers = new Set(stmtAroMembersActive.all(aroName).map(r => r.agent));
+        const members = allMembers.filter(a => channels.has(a) || recentMembers.has(a));
         if (!members.length) {
           res.writeHead(400);
-          res.end(JSON.stringify({ error: `aro '${aroName}' has no members (or only the sender)` }));
+          res.end(JSON.stringify({ error: `aro '${aroName}' has no active members (or only the sender)` }));
           return;
         }
         const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
@@ -487,6 +504,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       stmtUpsertReadCursor.run(agent, through_id);
+      stmtUpdateLastSeen.run(agent); // bridge calls this on every delivery cycle — keeps Codex agents fresh
       res.end(JSON.stringify({ ok: true, agent, read_id: through_id }));
       return;
     }

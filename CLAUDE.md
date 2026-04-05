@@ -86,15 +86,19 @@ Run `SELECT * FROM v_<name>` against the live DB:
 
 Message body is a JSON object. Minimum: `{"message": "your text"}`. Keep payloads lean.
 
+Messaging guide source of truth: DB `config` row `message_guide`, served by hub `/guide`, fetched by the `guide` MCP tool, and pushed by `channel.mjs` on register. Do not use markdown files as the guide source.
+
 Optional fields only when they serve a purpose:
-- `type` — workflow category (e.g., `test`, `request`, `ack`) when code or process branches on it
-- Structured keys (`file`, `items`, `error`, etc.) — when machine-readable data is needed
+- Avoid `type` unless a specific tool or workflow explicitly requires it.
+- Structured keys (`file`, `items`, `error`, etc.) only when machine-readable data is truly needed.
 
 Do **not** use `summary` + `details` as default. Put the content in `message`.
 
 The `log` endpoint previews use `summary` or `message` (first 120 chars) for display.
-
-For full messaging guidelines, agents can call the `guide` MCP tool or fetch from hub `/guide` endpoint.
+`llmmsg` is push-based. Never use sleep, backoff, polling loops, timers, or repeated read checks to wait for replies. After sending, stop and wait for push.
+Only if the user explicitly asks, or you have strong evidence a reply is missing after about 5 minutes, call `read_unread` once for recovery. No loops.
+Do not re-register defensively before sends. Register at session start, after a name change, or only after an actual `not_registered` error.
+For group-wide notices, default to `aro:{group}`. If you believe a message should go to `*`, ask Elazar first. Otherwise use `aro:{group}`.
 
 ## Script Versioning
 
