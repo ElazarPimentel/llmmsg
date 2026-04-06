@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
 
-const VERSION = '2.2';
+const VERSION = '2.3';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
 
@@ -439,6 +439,12 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && path === '/roster') {
       res.end(JSON.stringify(stmtRoster.all()));
+      return;
+    }
+
+    if (req.method === 'GET' && path === '/online') {
+      const online = [...channels.keys()].sort();
+      res.end(JSON.stringify({ online, count: online.length }));
       return;
     }
 

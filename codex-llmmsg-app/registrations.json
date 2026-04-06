@@ -1,12 +1,12 @@
 {
   "pluto-audit-ca": {
-    "threadId": "019d41e7-02e9-76d0-ad8d-a975494204e7",
-    "registeredAt": "2026-04-03T03:46:05.762Z",
+    "threadId": "019d62d3-73c4-7392-8743-98ce848fd428",
+    "registeredAt": "2026-04-06T12:45:18.753Z",
     "cwd": null
   },
   "pluto-pm-ca": {
     "threadId": "019d421a-488a-7731-9f13-497403f975d8",
-    "registeredAt": "2026-04-03T03:46:19.027Z",
+    "registeredAt": "2026-04-05T17:53:58.095Z",
     "cwd": null
   },
   "llmmsg-ca": {
@@ -16,16 +16,13 @@
   },
   "mars-audit-ca": {
     "threadId": "019d421c-c7e8-77b1-88c7-9f1cc506aa39",
-    "registeredAt": "2026-04-03T05:52:05.100Z",
+    "registeredAt": "2026-04-05T18:20:35.064Z",
     "cwd": null
   },
   "mars-pm-ca": {
     "threadId": "019d51f4-5103-7411-a6da-c00d8d4de4ae",
-    "registeredAt": "2026-04-04T02:54:04.790Z",
-    "cwd": null,
-    "suspended": true,
-    "suspendedAt": "2026-04-04T14:48:00.199Z",
-    "suspendReason": "thread not found: 019d51f4-5103-7411-a6da-c00d8d4de4ae"
+    "registeredAt": "2026-04-05T22:26:37.571Z",
+    "cwd": null
   },
   "mars-coder-ca": {
     "threadId": "019d51fa-805b-7483-b43a-5b39a0e7d438",
@@ -37,10 +34,12 @@
   },
   "pluto-coder-ca": {
     "threadId": "019d51ff-cb09-76b1-b976-63b1f104059a",
-    "registeredAt": "2026-04-03T06:20:12.050Z",
-    "cwd": null,
-    "suspended": true,
-    "suspendedAt": "2026-04-04T00:54:48.692Z",
-    "suspendReason": "thread not found: 019d51ff-cb09-76b1-b976-63b1f104059a"
+    "registeredAt": "2026-04-05T17:53:28.182Z",
+    "cwd": null
+  },
+  "kidsclubcafe-ca": {
+    "threadId": "019d5f4e-29d9-7730-8a7b-8d7e1759ed5e",
+    "registeredAt": "2026-04-05T20:20:51.907Z",
+    "cwd": null
   }
 }

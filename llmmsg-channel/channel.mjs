@@ -11,7 +11,7 @@ import {
 import http from 'node:http';
 import { execFileSync } from 'node:child_process';
 
-const VERSION = '1.7';
+const VERSION = '1.8';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_URL = `http://127.0.0.1:${HUB_PORT}`;
 const AGENT_CWD = process.env.LLMMSG_CWD || process.cwd();
@@ -107,6 +107,11 @@ const TOOLS = [
   {
     name: 'roster',
     description: 'List all registered agents and their working directories',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'online',
+    description: 'List agents currently online (active SSE connection to hub). CC agents only — Codex agents use bridge polling and won\'t appear here.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -244,6 +249,10 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
       }
       case 'roster': {
         const result = await httpGet('/roster');
+        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      }
+      case 'online': {
+        const result = await httpGet('/online');
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
       case 'thread': {
