@@ -18,6 +18,8 @@ const AGENT_CWD = process.env.LLMMSG_CWD || process.cwd();
 
 // Mutable — updated after register() call
 let currentAgent = (process.env.LLMMSG_AGENT || '').toLowerCase();
+// The alias used for the current SSE connection (may be unregistered-xxxx)
+let sseAlias = '';
 
 // HTTP helpers
 function httpPost(path, body) {
@@ -208,10 +210,11 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
     switch (name) {
       case 'register': {
         const newAgent = args.agent.toLowerCase();
+        // Send the exact SSE alias (which may be unregistered-xxxx) so the hub can deterministically migrate
         const result = await httpPost('/register', {
           agent: newAgent,
           cwd: AGENT_CWD,
-          old_agent: currentAgent || null,
+          old_agent: (sseAlias && sseAlias !== newAgent) ? sseAlias : (currentAgent || null),
         });
         if (result.ok) {
           currentAgent = newAgent;
@@ -339,6 +342,7 @@ if (currentAgent) {
 // Connect to hub via SSE for push delivery
 function connectToHub() {
   const agentParam = currentAgent || `unregistered-${Math.random().toString(36).slice(2, 8)}`;
+  sseAlias = agentParam; // remember the alias so manual register can pass it as old_agent
   const url = `${HUB_URL}/connect?agent=${encodeURIComponent(agentParam)}&cwd=${encodeURIComponent(AGENT_CWD)}`;
 
   http.get(url, (res) => {

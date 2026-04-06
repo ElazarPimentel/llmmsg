@@ -339,8 +339,7 @@ const server = http.createServer(async (req, res) => {
         stmtAroJoin.run(prefix, agent);
       }
 
-      // Migrate SSE connection to new agent name
-      let migrated = false;
+      // Migrate SSE connection from old_agent (may be an unregistered-* alias) to new agent name
       if (old_agent && old_agent !== agent) {
         const sseRes = channels.get(old_agent);
         if (sseRes) {
@@ -351,22 +350,10 @@ const server = http.createServer(async (req, res) => {
             stmtUpsertDeliveredCursor.run(agent, oldCursor.delivered_id || oldCursor.read_id || 0, oldCursor.delivered_id || oldCursor.read_id || 0);
           }
           console.log(`[register] renamed ${old_agent} → ${agent}`);
-          migrated = true;
+        } else {
+          console.log(`[register] ${agent} (old_agent ${old_agent} had no SSE)`);
         }
-      }
-      // If no old_agent provided but agent has no SSE, check for an unregistered-* alias to adopt
-      if (!migrated && !channels.has(agent)) {
-        for (const [key, sseRes] of channels) {
-          if (key.startsWith('unregistered-')) {
-            channels.delete(key);
-            channels.set(agent, sseRes);
-            console.log(`[register] adopted SSE ${key} → ${agent}`);
-            migrated = true;
-            break;
-          }
-        }
-      }
-      if (!migrated) {
+      } else {
         console.log(`[register] ${agent}`);
       }
 
