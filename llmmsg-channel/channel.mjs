@@ -218,6 +218,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
         });
         if (result.ok) {
           currentAgent = newAgent;
+          sseAlias = newAgent; // hub renamed the SSE entry, keep alias in sync
         }
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
