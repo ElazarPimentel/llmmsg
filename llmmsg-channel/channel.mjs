@@ -111,7 +111,7 @@ const TOOLS = [
   },
   {
     name: 'online',
-    description: 'List agents currently online in your ARO group(s). Includes both CC (SSE) and Codex (bridge) agents seen in the last hour. Pass aro param to check a specific group.',
+    description: 'List agents currently online in your ARO group(s). Includes both CC (SSE) and Codex (bridge) agents. Pass aro param to check a specific group.',
     inputSchema: {
       type: 'object',
       properties: {

@@ -140,14 +140,14 @@ const stmtLog = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, retracted_at FROM messages ORDER BY id DESC LIMIT ?`
 );
 const stmtCheckRoster = db.prepare(`SELECT 1 FROM roster WHERE agent = ?`);
-// ARO fanout only targets agents seen in the last hour (covers bridge-polled Codex agents) or with an active SSE connection.
-// Agents that went offline without unregistering are excluded after 1 hour of inactivity.
+// ARO fanout only targets agents seen in the last 30s (bridge heartbeats every 2s) or with an active SSE connection.
+// Agents that went offline without unregistering are excluded after 30s of inactivity.
 const stmtAroMembersAll = db.prepare(`SELECT agent FROM aros WHERE aro = ? ORDER BY agent`);
 const stmtAroMembersActive = db.prepare(
   `SELECT a.agent FROM aros a
-   LEFT JOIN roster r ON r.agent = a.agent
+   INNER JOIN roster r ON r.agent = a.agent
    WHERE a.aro = ?
-     AND (r.last_seen_at > strftime('%s','now') - 30 OR r.last_seen_at IS NULL)
+     AND r.last_seen_at > strftime('%s','now') - 30
    ORDER BY a.agent`
 );
 const stmtAroList = db.prepare(`SELECT aro, agent FROM aros ORDER BY aro, agent`);
@@ -339,20 +339,34 @@ const server = http.createServer(async (req, res) => {
         stmtAroJoin.run(prefix, agent);
       }
 
-      // Rename SSE connection if old_agent differs
+      // Migrate SSE connection to new agent name
+      let migrated = false;
       if (old_agent && old_agent !== agent) {
         const sseRes = channels.get(old_agent);
         if (sseRes) {
           channels.delete(old_agent);
           channels.set(agent, sseRes);
-          // Migrate cursor
           const oldCursor = stmtGetCursor.get(old_agent);
           if (oldCursor) {
             stmtUpsertDeliveredCursor.run(agent, oldCursor.delivered_id || oldCursor.read_id || 0, oldCursor.delivered_id || oldCursor.read_id || 0);
           }
           console.log(`[register] renamed ${old_agent} → ${agent}`);
+          migrated = true;
         }
-      } else {
+      }
+      // If no old_agent provided but agent has no SSE, check for an unregistered-* alias to adopt
+      if (!migrated && !channels.has(agent)) {
+        for (const [key, sseRes] of channels) {
+          if (key.startsWith('unregistered-')) {
+            channels.delete(key);
+            channels.set(agent, sseRes);
+            console.log(`[register] adopted SSE ${key} → ${agent}`);
+            migrated = true;
+            break;
+          }
+        }
+      }
+      if (!migrated) {
         console.log(`[register] ${agent}`);
       }
 
@@ -408,7 +422,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
       // aro fan-out: to: "aro:mars" → send to each active member individually
-      // "active" = has a live SSE connection OR was seen (registered/polled) in the last hour
+      // "active" = has a live SSE connection OR was seen (heartbeat/register) in the last 30s
       if (to.startsWith('aro:')) {
         const aroName = to.slice(4);
         const allMembers = stmtAroMembersAll.all(aroName).map(r => r.agent).filter(a => a !== from);
