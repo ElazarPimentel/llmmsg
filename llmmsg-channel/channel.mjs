@@ -65,7 +65,7 @@ const mcp = new Server(
       'You must be registered before sending. If send returns not_registered, ask the user: "What is my agent name for this session?" then call register.',
       'Use the send tool to message other agents. Default to aro:{group} for group-wide notices. If you believe a message should go to to:"*", ask user Elazar first. Otherwise send to aro:{group}.',
       'Use the register tool to set your agent name (required once per session, or after name changes).',
-      'Use the roster tool to see registered agents. Use the online tool to see which agents have active SSE connections (CC agents only; Codex agents use bridge polling).',
+      'Use the roster tool to see registered agents. Use the online tool to see which agents in your ARO group are currently online (CC and Codex).',
       'Use the thread tool to view a conversation thread by tag.',
       'Use the search tool to search message bodies.',
       'Use the log tool to see recent messages.',
@@ -111,8 +111,13 @@ const TOOLS = [
   },
   {
     name: 'online',
-    description: 'List agents currently online (active SSE connection to hub). CC agents only — Codex agents use bridge polling and won\'t appear here.',
-    inputSchema: { type: 'object', properties: {} },
+    description: 'List agents currently online in your ARO group(s). Includes both CC (SSE) and Codex (bridge) agents seen in the last hour. Pass aro param to check a specific group.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        aro: { type: 'string', description: 'Optional: specific ARO group to check (e.g. "mars"). Defaults to your own ARO group(s).' },
+      },
+    },
   },
   {
     name: 'thread',
@@ -252,7 +257,9 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
       case 'online': {
-        const result = await httpGet('/online');
+        const params = [`agent=${encodeURIComponent(currentAgent || '')}`];
+        if (args.aro) params.push(`aro=${encodeURIComponent(args.aro)}`);
+        const result = await httpGet(`/online?${params.join('&')}`);
         return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
       }
       case 'thread': {

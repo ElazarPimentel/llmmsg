@@ -148,6 +148,19 @@ async function deliverUnread(agent) {
   return { delivered: rows.length, lastId: maxId };
 }
 
+// Heartbeat: tell the hub this agent is alive so /online includes bridge-polled agents
+function hubHeartbeat(agent) {
+  const data = JSON.stringify({ agent });
+  return new Promise((resolve) => {
+    const req = http.request(`${HUB_URL}/heartbeat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+    }, (res) => { res.resume(); resolve(); });
+    req.on('error', () => resolve());
+    req.end(data);
+  });
+}
+
 const staleErrors = new Map(); // agent → consecutive error count
 
 async function watchAgents(pollMs = 2000) {
@@ -155,6 +168,7 @@ async function watchAgents(pollMs = 2000) {
     const registry = loadRegistry();
     for (const [agent, mapping] of Object.entries(registry)) {
       if (mapping.suspended) continue; // skip until re-registered
+      await hubHeartbeat(agent); // keep last_seen_at fresh so /online includes this agent
       try {
         const result = await deliverUnread(agent);
         if (result.delivered > 0) {

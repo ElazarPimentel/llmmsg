@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync } from 'node:fs';
 
-const VERSION = '2.3';
+const VERSION = '2.4';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
 
@@ -114,6 +114,7 @@ const stmtUpsertReadCursor = db.prepare(
      read_id = MAX(COALESCE(cursors.read_id, cursors.last_id), excluded.read_id)`
 );
 const stmtRoster = db.prepare(`SELECT agent, cwd FROM roster ORDER BY agent`);
+const stmtRosterFull = db.prepare(`SELECT agent, cwd, last_seen_at FROM roster ORDER BY agent`);
 const stmtRegister = db.prepare(
   `INSERT INTO roster (agent, cwd, last_seen_at) VALUES (?, ?, strftime('%s','now'))
    ON CONFLICT(agent) DO UPDATE SET cwd = excluded.cwd, registered_at = strftime('%s','now'), last_seen_at = strftime('%s','now')`
@@ -146,7 +147,7 @@ const stmtAroMembersActive = db.prepare(
   `SELECT a.agent FROM aros a
    LEFT JOIN roster r ON r.agent = a.agent
    WHERE a.aro = ?
-     AND (r.last_seen_at > strftime('%s','now') - 3600 OR r.last_seen_at IS NULL)
+     AND (r.last_seen_at > strftime('%s','now') - 30 OR r.last_seen_at IS NULL)
    ORDER BY a.agent`
 );
 const stmtAroList = db.prepare(`SELECT aro, agent FROM aros ORDER BY aro, agent`);
@@ -437,14 +438,50 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'POST' && path === '/heartbeat') {
+      const body = await parseBody(req);
+      const agent = (body.agent || '').toLowerCase();
+      if (agent) stmtUpdateLastSeen.run(agent);
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
     if (req.method === 'GET' && path === '/roster') {
       res.end(JSON.stringify(stmtRoster.all()));
       return;
     }
 
     if (req.method === 'GET' && path === '/online') {
-      const online = [...channels.keys()].sort();
-      res.end(JSON.stringify({ online, count: online.length }));
+      const agent = (url.searchParams.get('agent') || '').toLowerCase();
+      const aro = url.searchParams.get('aro');
+      const nowUnix = Math.floor(Date.now() / 1000);
+      const threshold = nowUnix - 30; // bridge heartbeats every 2s, so 30s catches any active agent
+
+      // All agents that are online: active SSE or recently seen
+      const rosterAll = stmtRosterFull.all();
+      const allOnline = rosterAll
+        .filter(r => channels.has(r.agent) || (r.last_seen_at && r.last_seen_at > threshold))
+        .map(r => r.agent);
+      const onlineSet = new Set(allOnline);
+
+      // Determine which ARO(s) to filter by
+      let aroFilter = null;
+      if (aro) {
+        aroFilter = [aro];
+      } else if (agent) {
+        aroFilter = stmtAroByAgent.all(agent).map(r => r.aro);
+      }
+
+      if (aroFilter && aroFilter.length > 0) {
+        const aroMembers = new Set();
+        for (const a of aroFilter) {
+          for (const m of stmtAroMembersAll.all(a)) aroMembers.add(m.agent);
+        }
+        const filtered = [...aroMembers].filter(a => onlineSet.has(a)).sort();
+        res.end(JSON.stringify({ online: filtered, count: filtered.length, aros: aroFilter }));
+      } else {
+        res.end(JSON.stringify({ online: allOnline.sort(), count: allOnline.length }));
+      }
       return;
     }
 

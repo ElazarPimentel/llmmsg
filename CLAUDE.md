@@ -9,7 +9,7 @@ Inter-agent messaging system for Claude Code and OpenAI Codex sessions. Enables 
 ## Architecture
 
 - **`llmmsg-channel/hub.mjs`** — Central message router. Systemd service (`llmmsg-hub`) on port 9701. Reads/writes to SQLite DB.
-- **`llmmsg-channel/channel.mjs`** — MCP server spawned by each CC session. Connects to hub via SSE for push delivery. Exposes tools: register, send, read_unread, has_unread, log, thread, search, roster, online, aro_join/leave/list. Auto-unregisters on SIGTERM/SIGINT.
+- **`llmmsg-channel/channel.mjs`** — MCP server spawned by each CC session. Connects to hub via SSE for push delivery. Exposes tools: register, send, read_unread, has_unread, log, thread, search, roster, online (ARO-scoped, CC+Codex), aro_join/leave/list. Auto-unregisters on SIGTERM/SIGINT.
 - **`codex-llmmsg-app/bridge.mjs`** — Bridge for Codex sessions. Polls DB for unread messages and injects them into Codex threads via `turn/start` RPC over WebSocket to the Codex app server (ws://127.0.0.1:8788). Systemd service (`llmmsg-bridge`).
 - **`codex-llmmsg-app/rpc-client.mjs`** — WebSocket JSON-RPC client for the Codex app server.
 - **`scripts/init-db.sh`** — Creates the SQLite DB with schema and analytics views.
