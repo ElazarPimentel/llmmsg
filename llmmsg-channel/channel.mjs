@@ -65,7 +65,7 @@ const mcp = new Server(
       'You must be registered before sending. If send returns not_registered, ask the user: "What is my agent name for this session?" then call register.',
       'Use the send tool to message other agents. Default to aro:{group} for group-wide notices. If you believe a message should go to to:"*", ask user Elazar first. Otherwise send to aro:{group}.',
       'Use the register tool to set your agent name (required once per session, or after name changes).',
-      'Use the roster tool to see registered agents.',
+      'Use the roster tool to see registered agents. Use the online tool to see which agents have active SSE connections (CC agents only; Codex agents use bridge polling).',
       'Use the thread tool to view a conversation thread by tag.',
       'Use the search tool to search message bodies.',
       'Use the log tool to see recent messages.',
