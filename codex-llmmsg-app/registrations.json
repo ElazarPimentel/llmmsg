@@ -1,45 +1,51 @@
 {
   "pluto-audit-ca": {
     "threadId": "019d62d3-73c4-7392-8743-98ce848fd428",
-    "registeredAt": "2026-04-06T12:45:18.753Z",
+    "registeredAt": "2026-04-07T01:50:44.518Z",
     "cwd": null
   },
   "pluto-pm-ca": {
     "threadId": "019d421a-488a-7731-9f13-497403f975d8",
     "registeredAt": "2026-04-05T17:53:58.095Z",
-    "cwd": null
+    "cwd": null,
+    "suspended": true,
+    "suspendedAt": "2026-04-06T23:18:56.221Z",
+    "suspendReason": "thread not found: 019d421a-488a-7731-9f13-497403f975d8"
   },
   "llmmsg-ca": {
     "threadId": "019d4155-c5f1-7d91-9478-dfa882289a09",
-    "registeredAt": "2026-04-06T16:07:52.227Z",
+    "registeredAt": "2026-04-07T21:24:26.336Z",
     "cwd": null
   },
   "mars-audit-ca": {
     "threadId": "019d62eb-c44d-7df3-9b45-078bd8cfab50",
-    "registeredAt": "2026-04-06T13:11:52.255Z",
+    "registeredAt": "2026-04-07T00:50:25.639Z",
     "cwd": null
   },
   "mars-pm-ca": {
     "threadId": "019d51f4-5103-7411-a6da-c00d8d4de4ae",
     "registeredAt": "2026-04-05T22:26:37.571Z",
-    "cwd": null
-  },
-  "mars-coder-ca": {
-    "threadId": "019d51fa-805b-7483-b43a-5b39a0e7d438",
-    "registeredAt": "2026-04-03T06:14:25.231Z",
     "cwd": null,
     "suspended": true,
-    "suspendedAt": "2026-04-04T01:29:37.333Z",
-    "suspendReason": "thread not found: 019d51fa-805b-7483-b43a-5b39a0e7d438"
+    "suspendedAt": "2026-04-06T23:18:56.378Z",
+    "suspendReason": "thread not found: 019d51f4-5103-7411-a6da-c00d8d4de4ae"
+  },
+  "mars-coder-ca": {
+    "threadId": "019d68c1-7e02-7010-adfd-5ec181cbf49f",
+    "registeredAt": "2026-04-07T16:23:25.055Z",
+    "cwd": null
   },
   "pluto-coder-ca": {
-    "threadId": "019d51ff-cb09-76b1-b976-63b1f104059a",
-    "registeredAt": "2026-04-05T17:53:28.182Z",
+    "threadId": "019d6628-a85b-7a51-8e6b-6f9caa848a14",
+    "registeredAt": "2026-04-07T04:17:14.509Z",
     "cwd": null
   },
   "kidsclubcafe-ca": {
     "threadId": "019d5f4e-29d9-7730-8a7b-8d7e1759ed5e",
     "registeredAt": "2026-04-05T20:20:51.907Z",
-    "cwd": null
+    "cwd": null,
+    "suspended": true,
+    "suspendedAt": "2026-04-06T23:18:56.437Z",
+    "suspendReason": "thread not found: 019d5f4e-29d9-7730-8a7b-8d7e1759ed5e"
   }
 }

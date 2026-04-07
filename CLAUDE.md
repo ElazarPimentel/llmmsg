@@ -95,10 +95,12 @@ Optional fields only when they serve a purpose:
 Do **not** use `summary` + `details` as default. Put the content in `message`.
 
 The `log` endpoint previews use `summary` or `message` (first 120 chars) for display.
-`llmmsg` is push-based. Never use sleep, backoff, polling loops, timers, or repeated read checks to wait for replies. After sending, stop and wait for push.
-Only if the user explicitly asks, or you have strong evidence a reply is missing after about 5 minutes, call `read_unread` once for recovery. No loops.
+`llmmsg` is push-based. After sending, rely on push. Do not use sleep, polling, timers, loops, backoff, or repeated checks.
+Call `read_unread` once only if the user asked, or if there is clear evidence a reply is missing. Inform your project's PM agent of missing replies. If that does not resolve it, tell the user in the terminal.
 Do not re-register defensively before sends. Register at session start, after a name change, or only after an actual `not_registered` error.
-For group-wide notices, default to `aro:{group}`. If you believe a message should go to `*`, ask Elazar first. Otherwise use `aro:{group}`.
+For group-wide notices, default to `aro:{group}`. Use `*` only with Elazar's explicit approval. Never broadcast what can be group-addressed.
+Do not resend shared context. Lead with the payload. Prefer plain prose. If 3 lines are enough, do not send 30.
+When a channel message requires a reply, send it directly and move on. Do not summarize the exchange in the CLI — the user can see the channel tags.
 
 ## Script Versioning
 

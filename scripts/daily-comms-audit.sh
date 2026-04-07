@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
-VERSION="1.2"
-echo "daily-comms-audit.sh v$VERSION"
+VERSION="1.6"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
+REPORT_DIR="${LLMMSG_REPORT_DIR:-/opt/llmmsg/sqlite-report}"
+REPORT_FILE="$REPORT_DIR/$(date +%F)-llmmsg-sqlite-report.txt"
 
 if [[ ! -f "$DB" ]]; then
     echo "DB not found: $DB" >&2
     exit 1
 fi
+
+mkdir -p "$REPORT_DIR"
+exec > >(tee "$REPORT_FILE") 2>&1
+
+echo "daily-comms-audit.sh v$VERSION"
+echo "Report file: $REPORT_FILE"
 
 # Median avg_chars across agents (for comparison)
 MEDIAN=$(sqlite3 "$DB" "
@@ -23,6 +30,7 @@ MEDIAN=$(sqlite3 "$DB" "
   SELECT avg_chars FROM agent_avgs
   LIMIT 1 OFFSET (SELECT n/2 FROM counted);
 ")
+MEDIAN="${MEDIAN:-0}"
 
 # Average avg_chars across agents
 AVERAGE=$(sqlite3 "$DB" "
@@ -35,6 +43,7 @@ AVERAGE=$(sqlite3 "$DB" "
   )
   SELECT ROUND(AVG(avg_chars)) FROM agent_avgs;
 ")
+AVERAGE="${AVERAGE:-0}"
 
 echo ""
 echo "=== Last 24h Communications Audit ==="
@@ -43,13 +52,57 @@ echo "Average avg chars/message: $AVERAGE"
 echo ""
 
 echo "--- Per-Agent Efficiency ---"
-sqlite3 -header -column "$DB" "SELECT * FROM v_daily_efficiency;"
+sqlite3 -header -column "$DB" "
+  SELECT
+    sender,
+    COUNT(*) AS msgs,
+    ROUND(AVG(LENGTH(body))) AS avg_chars,
+    MAX(LENGTH(body)) AS max_chars,
+    SUM(LENGTH(body)) AS total_chars,
+    ROUND(SUM(LENGTH(body)) / 4.0) AS est_tokens,
+    SUM(CASE WHEN re IS NOT NULL THEN 1 ELSE 0 END) AS replies,
+    SUM(CASE WHEN re IS NULL THEN 1 ELSE 0 END) AS initiated,
+    ROUND(AVG(CASE WHEN re IS NOT NULL THEN LENGTH(body) END)) AS avg_reply_chars,
+    ROUND(AVG(CASE WHEN re IS NULL THEN LENGTH(body) END)) AS avg_init_chars,
+    SUM(CASE WHEN LENGTH(body) > 2000 THEN 1 ELSE 0 END) AS over_2k,
+    SUM(
+      CASE
+        WHEN json_valid(body)
+         AND json_extract(body, '$.summary') IS NOT NULL
+         AND json_extract(body, '$.details') IS NOT NULL
+        THEN 1
+        ELSE 0
+      END
+    ) AS has_summary_and_details,
+    SUM(
+      CASE
+        WHEN json_valid(body)
+         AND json_extract(body, '$.summary') IS NOT NULL
+         AND json_extract(body, '$.message') IS NOT NULL
+        THEN 1
+        ELSE 0
+      END
+    ) AS has_summary_and_message
+  FROM messages
+  WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+    AND retracted_at IS NULL
+  GROUP BY sender
+  ORDER BY total_chars DESC;
+"
 
 echo ""
 echo "--- Flagged: Messages over 2000 chars ---"
 sqlite3 -header -column "$DB" "
   SELECT id, sender, recipient, tag, LENGTH(body) AS chars,
-    SUBSTR(COALESCE(json_extract(body, '$.summary'), json_extract(body, '$.message'), body), 1, 80) AS preview
+    SUBSTR(
+      COALESCE(
+        CASE WHEN json_valid(body) THEN json_extract(body, '$.summary') END,
+        CASE WHEN json_valid(body) THEN json_extract(body, '$.message') END,
+        body
+      ),
+      1,
+      80
+    ) AS preview
   FROM messages
   WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
     AND retracted_at IS NULL
@@ -64,6 +117,7 @@ sqlite3 -header -column "$DB" "
   FROM messages
   WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
     AND retracted_at IS NULL
+    AND json_valid(body)
     AND json_extract(body, '$.summary') IS NOT NULL
     AND json_extract(body, '$.details') IS NOT NULL
   ORDER BY chars DESC;
@@ -89,12 +143,14 @@ sqlite3 -header -column "$DB" "
   FROM messages
   WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
     AND retracted_at IS NULL
+    AND json_valid(body)
     AND json_extract(body, '$.type') IS NOT NULL
     AND json_extract(body, '$.type') IN (
       SELECT json_extract(body, '$.type')
       FROM messages
       WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
         AND retracted_at IS NULL
+        AND json_valid(body)
         AND json_extract(body, '$.type') IS NOT NULL
       GROUP BY json_extract(body, '$.type')
       HAVING COUNT(*) = 1
@@ -183,7 +239,18 @@ sqlite3 "$DB" "
     SUM(LENGTH(body)),
     ROUND(SUM(LENGTH(body)) / 4.0),
     SUM(CASE WHEN LENGTH(body) > 2000 THEN 1 ELSE 0 END),
-    SUM(CASE WHEN json_extract(body, '$.summary') IS NOT NULL AND (json_extract(body, '$.details') IS NOT NULL OR json_extract(body, '$.message') IS NOT NULL) THEN 1 ELSE 0 END)
+    SUM(
+      CASE
+        WHEN json_valid(body)
+         AND json_extract(body, '$.summary') IS NOT NULL
+         AND (
+           json_extract(body, '$.details') IS NOT NULL
+           OR json_extract(body, '$.message') IS NOT NULL
+         )
+        THEN 1
+        ELSE 0
+      END
+    )
   FROM messages
   WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
     AND retracted_at IS NULL
@@ -191,3 +258,9 @@ sqlite3 "$DB" "
 "
 echo ""
 echo "Audit snapshot saved (guide v$GUIDE_VERSION)"
+
+REPORT_DIR_KB=$(du -sk "$REPORT_DIR" | awk '{print $1}')
+if (( REPORT_DIR_KB >= 10240 )); then
+    REPORT_DIR_MB=$(awk "BEGIN { printf \"%.1f\", $REPORT_DIR_KB / 1024 }")
+    echo "WARNING: $REPORT_DIR is ${REPORT_DIR_MB} MB. Consider cleaning old reports."
+fi
