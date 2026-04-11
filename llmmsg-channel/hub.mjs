@@ -15,6 +15,7 @@ const SITE_NAME = process.env.LLMMSG_SITE || '';
 const REMOTE_HUBS_JSON = process.env.LLMMSG_REMOTE_HUBS || ''; // JSON: {"lezama":"http://10.78.42.168:9701"}
 const INBOUND_SECRET = process.env.LLMMSG_INBOUND_SECRET || ''; // shared secret for /inbound auth
 const SITE_SUFFIX = process.env.LLMMSG_SITE_SUFFIX || ''; // required agent name suffix (e.g. -l)
+const ARO_SEGMENT = parseInt(process.env.LLMMSG_ARO_SEGMENT || '0'); // which name segment is the project (0=first, 1=second)
 const BRIDGE_REGISTRY_PATH = new URL('../codex-llmmsg-app/registrations.json', import.meta.url);
 
 if (!existsSync(DB_PATH)) {
@@ -445,12 +446,14 @@ const server = http.createServer(async (req, res) => {
 
       stmtRegister.run(agent, cwd);
 
-      // Auto-join aro based on name prefix (first segment before '-')
-      // If LLMMSG_SITE is set, append site suffix for host-scoped AROs
-      // e.g. on site "lezama": pluto-pm-ccs-l → aro "pluto-l"
-      const prefix = agent.split('-')[0];
-      if (prefix && prefix !== agent) {
-        const aroName = SITE_SUFFIX ? `${prefix}${SITE_SUFFIX}` : prefix;
+      // Auto-join aro: extract project name from agent name segments
+      // Whey (segment 0): pluto-pm-ccs → aro "pluto"
+      // Lezama (segment 1): pm-pluto-ccs-l → aro "pluto-l"
+      // Configurable via LLMMSG_ARO_SEGMENT (default: 0)
+      const parts = agent.split('-');
+      const project = parts[ARO_SEGMENT] || parts[0];
+      if (project && project !== agent) {
+        const aroName = SITE_SUFFIX ? `${project}${SITE_SUFFIX}` : project;
         stmtAroJoin.run(aroName, agent);
       }
 
