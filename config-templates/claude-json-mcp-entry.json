@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "llmmsg-channel": {
+      "command": "node",
+      "args": ["/opt/llmmsg/llmmsg-channel/channel.mjs"],
+      "env": {
+        "LLMMSG_HUB_PORT": "9701"
+      }
+    }
+  }
+}

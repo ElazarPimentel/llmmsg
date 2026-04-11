@@ -5,11 +5,12 @@
 
 import http from 'node:http';
 import Database from 'better-sqlite3';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const VERSION = '2.4';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
+const BRIDGE_REGISTRY_PATH = new URL('../codex-llmmsg-app/registrations.json', import.meta.url);
 
 if (!existsSync(DB_PATH)) {
   console.error(`DB not found: ${DB_PATH}`);
@@ -279,6 +280,23 @@ function parseBody(req) {
   });
 }
 
+function isCodexAgent(agent) {
+  return agent.endsWith('-ca');
+}
+
+function loadBridgeRegistry() {
+  try {
+    return JSON.parse(readFileSync(BRIDGE_REGISTRY_PATH, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+function hasActiveBridgeRegistration(agent) {
+  const entry = loadBridgeRegistry()[agent];
+  return !!(entry && entry.threadId && !entry.suspended);
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const path = url.pathname;
@@ -367,7 +385,14 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      res.end(JSON.stringify({ ok: true, agent }));
+      const bridgeReady = !isCodexAgent(agent) || hasActiveBridgeRegistration(agent);
+      const response = { ok: true, agent, bridge_ready: bridgeReady };
+      if (isCodexAgent(agent) && !bridgeReady) {
+        response.warning = `No active Codex bridge registration for '${agent}'. Push into Codex will not work until the session is launched or re-bound with cf ${agent}.`;
+        console.warn(`[register] ${agent} has roster entry but no active bridge registration`);
+      }
+
+      res.end(JSON.stringify(response));
       return;
     }
 
@@ -414,7 +439,11 @@ const server = http.createServer(async (req, res) => {
         const aroName = to.slice(4);
         const allMembers = stmtAroMembersAll.all(aroName).map(r => r.agent).filter(a => a !== from);
         const recentMembers = new Set(stmtAroMembersActive.all(aroName).map(r => r.agent));
-        const members = allMembers.filter(a => channels.has(a) || recentMembers.has(a));
+        const members = allMembers.filter((a) => {
+          if (channels.has(a)) return true;
+          if (!recentMembers.has(a)) return false;
+          return !isCodexAgent(a) || hasActiveBridgeRegistration(a);
+        });
         if (!members.length) {
           res.writeHead(400);
           res.end(JSON.stringify({ error: `aro '${aroName}' has no active members (or only the sender)` }));
@@ -426,7 +455,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      if (to !== '*' && !stmtCheckRoster.get(to)) {
+      if (to !== '*' && !stmtCheckRoster.get(to) && !hasActiveBridgeRegistration(to)) {
         const roster = stmtRoster.all().map(r => r.agent);
         res.writeHead(400);
         res.end(JSON.stringify({ error: `recipient '${to}' not in roster`, roster }));
@@ -461,7 +490,11 @@ const server = http.createServer(async (req, res) => {
       // All agents that are online: active SSE or recently seen
       const rosterAll = stmtRosterFull.all();
       const allOnline = rosterAll
-        .filter(r => channels.has(r.agent) || (r.last_seen_at && r.last_seen_at > threshold))
+        .filter((r) => {
+          if (channels.has(r.agent)) return true;
+          if (!(r.last_seen_at && r.last_seen_at > threshold)) return false;
+          return !isCodexAgent(r.agent) || hasActiveBridgeRegistration(r.agent);
+        })
         .map(r => r.agent);
       const onlineSet = new Set(allOnline);
 

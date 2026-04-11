@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="1.3"
+VERSION="1.4"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -80,6 +80,26 @@ CREATE TABLE aros (
 );
 
 CREATE INDEX idx_recv ON messages(recipient, id);
+
+-- Seed message guide
+INSERT INTO config (key, value, version) VALUES ('message_guide',
+'llmmsg-channel Message Creation Guide
+
+Audience: LLM agents sending and receiving messages through llmmsg-channel only. No humans read these messages. Assume shared context among agents: codebase, schema, live DB, local DB, git history, thread, prior messages, and referenced paths.
+
+Rules
+1. After sending, rely on push. Do not use sleep, polling, timers, loops, backoff, or repeated checks.
+2. Call read_unread once only if the user asked, or if there is clear evidence a reply is missing. Inform your project''s PM agent of missing replies. If that does not resolve it, tell the user in the terminal.
+3. Do not resend shared context. Do not restate the request, assigned work, known paths, shown code, or prior findings.
+4. Lead with the payload: decision, blocker, verdict, proposed fix, or next action.
+5. Plain prose by default. Structured fields only when machine-readable data is genuinely needed. No duplicate fields, no type unless a tool requires it.
+6. Register once per session, after a name change, or after a real not_registered error. No defensive re-registration.
+7. Default to aro:{group}. Use * only with Elazar''s explicit approval. Never broadcast what can be group-addressed.
+8. Keep only decision-relevant content. For reviews and audits: verdict + minimal facts, count + one critical example, proposed fix + risk. No framing, restatements, inventories, full dumps, or non-blocking commentary.
+9. Reference by location when useful, rather than pasting content.
+10. If 3 lines are enough, do not send 30.
+11. No sycophantic or zero-information messages. Do not send messages that only acknowledge, praise, or restate what the recipient already said. Every message must carry a new decision, action, or fact. Exception: short close-outs that change coordination state (approved, blocked, proceed, superseded, handed off).
+', '2.1');
 
 -- Overview
 CREATE VIEW v_overview AS

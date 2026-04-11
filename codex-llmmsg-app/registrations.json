@@ -1,7 +1,7 @@
 {
   "pluto-audit-ca": {
     "threadId": "019d62d3-73c4-7392-8743-98ce848fd428",
-    "registeredAt": "2026-04-07T01:50:44.518Z",
+    "registeredAt": "2026-04-08T02:24:51.359Z",
     "cwd": null
   },
   "pluto-pm-ca": {
@@ -14,30 +14,27 @@
   },
   "llmmsg-ca": {
     "threadId": "019d4155-c5f1-7d91-9478-dfa882289a09",
-    "registeredAt": "2026-04-07T21:24:26.336Z",
-    "cwd": null
+    "registeredAt": "2026-04-09T21:58:15.973Z",
+    "cwd": "/opt/llmmsg"
   },
   "mars-audit-ca": {
     "threadId": "019d62eb-c44d-7df3-9b45-078bd8cfab50",
-    "registeredAt": "2026-04-07T00:50:25.639Z",
+    "registeredAt": "2026-04-08T02:24:40.048Z",
     "cwd": null
   },
   "mars-pm-ca": {
-    "threadId": "019d51f4-5103-7411-a6da-c00d8d4de4ae",
-    "registeredAt": "2026-04-05T22:26:37.571Z",
-    "cwd": null,
-    "suspended": true,
-    "suspendedAt": "2026-04-06T23:18:56.378Z",
-    "suspendReason": "thread not found: 019d51f4-5103-7411-a6da-c00d8d4de4ae"
+    "threadId": "019d6fab-d3f9-78b0-9c30-556c2f2a111d",
+    "registeredAt": "2026-04-10T01:48:55.530Z",
+    "cwd": "/home/rob"
   },
   "mars-coder-ca": {
     "threadId": "019d68c1-7e02-7010-adfd-5ec181cbf49f",
-    "registeredAt": "2026-04-07T16:23:25.055Z",
+    "registeredAt": "2026-04-08T02:24:29.503Z",
     "cwd": null
   },
   "pluto-coder-ca": {
     "threadId": "019d6628-a85b-7a51-8e6b-6f9caa848a14",
-    "registeredAt": "2026-04-07T04:17:14.509Z",
+    "registeredAt": "2026-04-08T02:24:47.870Z",
     "cwd": null
   },
   "kidsclubcafe-ca": {
@@ -47,5 +44,65 @@
     "suspended": true,
     "suspendedAt": "2026-04-06T23:18:56.437Z",
     "suspendReason": "thread not found: 019d5f4e-29d9-7730-8a7b-8d7e1759ed5e"
+  },
+  "coder-ayudem-ca": {
+    "threadId": "019d6a7b-ec26-79e2-987b-7ea3408b55a0",
+    "registeredAt": "2026-04-08T00:26:40.165Z",
+    "cwd": null
+  },
+  "coder-ayudarg-ca": {
+    "threadId": "019d6aee-93c4-7710-96f6-2dfe47b4f4e8",
+    "registeredAt": "2026-04-08T03:05:55.729Z",
+    "cwd": null
+  },
+  "auditor-ayudarg-ca": {
+    "threadId": "019d6b0c-06e6-7bb0-84c4-b64a9cf410ce",
+    "registeredAt": "2026-04-08T08:00:32.071Z",
+    "cwd": null
+  },
+  "pm-ayudarg-ca": {
+    "threadId": "019d6bd9-9234-7a10-8927-336dfd8f3954",
+    "registeredAt": "2026-04-11T01:49:55.081Z",
+    "cwd": "/home/rob"
+  },
+  "sh-ca": {
+    "threadId": "019d6bf6-455d-7e83-9c30-0ecb9ed8f208",
+    "registeredAt": "2026-04-08T07:19:55.607Z",
+    "cwd": null
+  },
+  "whey-os-ca": {
+    "threadId": "019d6f38-b4d7-7521-b889-e4b64dabab66",
+    "registeredAt": "2026-04-08T22:31:21.428Z",
+    "cwd": null
+  },
+  "draandreaesparza-com-ca": {
+    "threadId": "019d4232-dce3-7f80-a4b1-c1d730854da2",
+    "registeredAt": "2026-04-08T23:31:00.727Z",
+    "cwd": null
+  },
+  "mars-db-ca": {
+    "threadId": "019d6fa9-02ae-7721-bf17-ed57b6e2c752",
+    "registeredAt": "2026-04-09T00:34:01.130Z",
+    "cwd": null
+  },
+  "pluto-db-ca": {
+    "threadId": "019d6fe2-9325-7981-9525-67dc3bffc6fa",
+    "registeredAt": "2026-04-09T01:36:53.663Z",
+    "cwd": null
+  },
+  "llmmsg/": {
+    "threadId": "019d7424-2ba6-72b2-9972-746dcae7ddb1",
+    "registeredAt": "2026-04-09T21:27:01.420Z",
+    "cwd": null
+  },
+  "llmmsg-ccs": {
+    "threadId": "019d7424-9390-72a0-a418-ab3f1d186056",
+    "registeredAt": "2026-04-09T21:27:27.985Z",
+    "cwd": null
+  },
+  "api-images-ca": {
+    "threadId": "019d74bf-b181-7180-9cec-309e441686be",
+    "registeredAt": "2026-04-10T00:17:12.651Z",
+    "cwd": "/home/rob"
   }
 }

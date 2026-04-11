@@ -1,0 +1,17 @@
+[Unit]
+Description=Codex App Server (shared session bus on ws://127.0.0.1:8788)
+After=network.target
+
+[Service]
+LimitNOFILE=65536
+Type=simple
+User=rob
+WorkingDirectory=/home/rob
+ExecStart=/usr/local/bin/codex -c 'approval_policy="never"' -c 'sandbox_mode="danger-full-access"' app-server --listen ws://127.0.0.1:8788
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

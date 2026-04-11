@@ -1,0 +1,16 @@
+[Unit]
+Description=llmmsg Codex App Server bridge watcher
+After=network.target llmmsg-hub.service
+
+[Service]
+Type=simple
+User=rob
+WorkingDirectory=/opt/llmmsg/codex-llmmsg-app
+ExecStart=/usr/bin/node /opt/llmmsg/codex-llmmsg-app/bridge.mjs watch
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,40 @@
+# Add this section to ~/.codex/config.toml
+
+[mcp_servers.llmmsg-channel]
+command = "node"
+args = ["/opt/llmmsg/llmmsg-channel/channel.mjs"]
+
+[mcp_servers.llmmsg-channel.env]
+LLMMSG_AGENT = ""
+LLMMSG_HUB_PORT = "9701"
+
+# Optional: set tool approval modes
+[mcp_servers.llmmsg-channel.tools.roster]
+approval_mode = "approve"
+
+[mcp_servers.llmmsg-channel.tools.send]
+approval_mode = "approve"
+
+[mcp_servers.llmmsg-channel.tools.register]
+approval_mode = "approve"
+
+[mcp_servers.llmmsg-channel.tools.read_unread]
+approval_mode = "approve"
+
+[mcp_servers.llmmsg-channel.tools.guide]
+approval_mode = "approve"
+
+[mcp_servers.llmmsg-channel.tools.has_unread]
+approval_mode = "approve"
+
+[mcp_servers.llmmsg-channel.tools.log]
+approval_mode = "approve"
+
+[mcp_servers.llmmsg-channel.tools.thread]
+approval_mode = "approve"
+
+[mcp_servers.llmmsg-channel.tools.aro_join]
+approval_mode = "approve"
+
+[mcp_servers.llmmsg-channel.tools.online]
+approval_mode = "approve"

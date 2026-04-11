@@ -1,0 +1,132 @@
+daily-comms-audit.sh v1.7
+Report file: /opt/llmmsg/sqlite-report/2026-04-08-llmmsg-sqlite-report.txt
+
+=== Last 24h Communications Audit ===
+Median avg chars/message: 560.0
+Average avg chars/message: 755.0
+
+--- Per-Agent Efficiency ---
+sender                    msgs  avg_chars  max_chars  total_chars  est_tokens  replies  initiated  avg_reply_chars  avg_init_chars  over_2k  has_summary_and_details  has_summary_and_message
+------------------------  ----  ---------  ---------  -----------  ----------  -------  ---------  ---------------  --------------  -------  -----------------------  -----------------------
+pm-ayudarg-ccs            129   383.0      1920       49425        12356.0     30       99         288.0            412.0           0        0                        0                      
+auditor-ayudarg-ca        24    1963.0     6857       47114        11779.0     10       14         2893.0           1299.0          10       0                        0                      
+coder-ayudarg-ca          71    371.0      1241       26335        6584.0      45       26         369.0            373.0           0        0                        0                      
+pluto-pm-ccs              31    826.0      2541       25618        6405.0      7        24         995.0            777.0           1        0                        0                      
+db-ayudarg-ccs            42    551.0      2785       23162        5791.0      29       13         589.0            469.0           1        0                        0                      
+mars-pm-ccs               34    344.0      1030       11710        2928.0      3        31         179.0            360.0           0        0                        0                      
+pluto-db-ccs              14    622.0      1723       8713         2178.0      12       2          612.0            686.0           0        0                        0                      
+pluto-coder-ccs           11    560.0      1160       6160         1540.0      11       0          560.0                            0        0                        0                      
+pluto-audit-ca            2     2975.0     4332       5950         1488.0      0        2                           2975.0          1        0                        0                      
+mars-audit-ca             5     1155.0     1801       5775         1444.0      0        5                           1155.0          0        0                        0                      
+mars-coder-ca             10    463.0      965        4630         1158.0      10       0          463.0                            0        0                        0                      
+llmmsg-ccs                6     703.0      1028       4218         1055.0      1        5          593.0            725.0           0        0                        0                      
+auditor-ayudarg-ccs       5     755.0      1387       3777         944.0       5        0          755.0                            0        0                        0                      
+mars-db-ccs               3     1212.0     2832       3637         909.0       3        0          1212.0                           1        0                        0                      
+pluto-coder-ca            3     1062.0     1223       3187         797.0       2        1          998.0            1191.0          0        0                        0                      
+mars-coder-ccs            6     503.0      793        3017         754.0       6        0          503.0                            0        0                        0                      
+coder-ayudarg-ccs         6     348.0      1206       2090         523.0       5        1          399.0            95.0            0        0                        0                      
+sh-ca                     1     1210.0     1210       1210         303.0       1        0          1210.0                           0        0                        0                      
+llmmsg-ca                 2     534.0      630        1068         267.0       2        0          534.0                            0        0                        0                      
+websites-ccs              1     988.0      988        988          247.0       0        1                           988.0           0        0                        0                      
+pm-ayudarg-ca             3     261.0      299        784          196.0       1        2          299.0            243.0           0        0                        0                      
+api-images-ccs            6     55.0       147        327          82.0        1        5          147.0            36.0            0        0                        0                      
+draandreaesparza-com-ccs  1     224.0      224        224          56.0        1        0          224.0                            0        0                        0                      
+pm-ayudem-ccs             1     50.0       50         50           13.0        0        1                           50.0            0        0                        0                      
+
+--- Top Conversation Pairs ---
+pair                                  msgs  chars  est_tokens
+------------------------------------  ----  -----  ----------
+auditor-ayudarg-ca -> pm-ayudarg-ccs  19    39450  9863.0    
+pm-ayudarg-ccs -> coder-ayudarg-ca    64    24864  6216.0    
+coder-ayudarg-ca -> pm-ayudarg-ccs    57    21202  5301.0    
+db-ayudarg-ccs -> pm-ayudarg-ccs      25    11351  2838.0    
+pluto-pm-ccs -> pluto-coder-ccs       9     9339   2335.0    
+pm-ayudarg-ccs -> auditor-ayudarg-ca  22    8626   2157.0    
+pluto-pm-ccs -> pm-ayudarg-ccs        8     8607   2152.0    
+db-ayudarg-ccs -> coder-ayudarg-ca    11    8277   2069.0    
+
+--- Flagged: Messages over 2000 chars ---
+id    sender              recipient         tag                      chars  preview                                                                         
+----  ------------------  ----------------  -----------------------  -----  --------------------------------------------------------------------------------
+2680  auditor-ayudarg-ca  pm-ayudarg-ccs    auditor-ayudarg-ca-2680  6857   {"verdict":"Deep scan findings: several substantial chunks of application logic 
+
+2574  auditor-ayudarg-ca  coder-ayudarg-ca  auditor-ayudarg-ca-2574  5446   {"verdict":"Root cause: old MariaDB geocoded from `callejero.coordenadas` LINEST
+
+2810  pluto-audit-ca      pluto-pm-ccs      pluto-audit-ca-2810      4332   {"text":"Verdict: Pluto is not mobile-first yet. Main blockers are undersized sh
+
+2676  auditor-ayudarg-ca  pm-ayudarg-ccs    auditor-ayudarg-ca-2676  4266   {"verdict":"Findings: 3 material issues. SQL injection handling is generally cor
+
+2744  auditor-ayudarg-ca  pm-ayudarg-ccs    auditor-ayudarg-ca-2744  4255   {"verdict":"Not a clean pass. Auth guards, SQL parameterization, lookup/org quer
+
+2562  auditor-ayudarg-ca  pm-ayudarg-ccs    auditor-ayudarg-ca-2562  3577   {"verdict":"2 broken, 1 partial, 1 missing.","details":"1) Cargar necesidades/cr
+
+2687  auditor-ayudarg-ca  pm-ayudarg-ccs    auditor-ayudarg-ca-2687  3484   {"verdict":"Mostly clean migration: `acciones.ts` no longer uses Supabase JS dat
+
+2855  auditor-ayudarg-ca  pm-ayudarg-ccs    auditor-ayudarg-ca-2855  3461   {"verdict":"`/necesidades` is visually weak and mobile-hostile. Main problem: it
+
+2889  mars-db-ccs         mars-pm-ccs       mars-db-ccs-2889         2832   TSV vs DB comparison - discrepancies report:                                    
+                                                                                                                                                            
+                                                                            ## 1. isPrincipal: ALL false in DB                                              
+
+2617  db-ayudarg-ccs      coder-ayudarg-ca  db-ayudarg-ccs-2617      2785   Naming map (old -> new). Schema not applied yet - applying now. Use these names 
+
+2603  pluto-pm-ccs        pm-ayudarg-ccs    pluto-pm-ccs-2603        2541   Pluto's patterns for each:                                                      
+                                                                                                                                                            
+                                                                            **1. User creation:**                                                           
+                                                                            - Admin UI at `/admin/usuarios                                                  
+
+2793  auditor-ayudarg-ca  pm-ayudarg-ccs    auditor-ayudarg-ca-2793  2240   {"verdict":"No runtime-breaking unquoted camelCase table, column, or function id
+
+2678  auditor-ayudarg-ca  pm-ayudarg-ccs    auditor-ayudarg-ca-2678  2142   {"verdict":"Correction to audit 2676: findings #1 and #2 are withdrawn. The live
+
+2695  auditor-ayudarg-ca  pm-ayudarg-ccs    auditor-ayudarg-ca-2695  2118   {"verdict":"Pass. The 3 changes are correct and consistent. Coder can push.","de
+
+--- Flagged: Duplicate summary+details pattern ---
+
+--- Flagged: Agents 2x above median avg chars ---
+sender              msgs  avg_chars  vs_median
+------------------  ----  ---------  ---------
+pluto-audit-ca      2     2975.0     5.3      
+auditor-ayudarg-ca  24    1963.0     3.5      
+mars-db-ccs         3     1212.0     2.2      
+sh-ca               1     1210.0     2.2      
+mars-audit-ca       5     1155.0     2.1      
+
+--- Flagged: One-off type values (used only once in 24h) ---
+type    sender              tag                    
+------  ------------------  -----------------------
+status  auditor-ayudarg-ca  auditor-ayudarg-ca-2554
+
+--- Summary ---
+{"period":"24h","total_messages":417,"total_chars":239169,"est_tokens":59792.0,"median_avg_chars":560.0,"agents_above_2x_median":5}
+
+--- Comparison vs Last Audit (2026-04-08 04:08:34, guide v2.0) ---
+agent                     msgs_now  msgs_prev  msgs_delta  avg_now  avg_prev  avg_delta  tok_now  tok_prev  tok_delta  big_now  big_prev
+------------------------  --------  ---------  ----------  -------  --------  ---------  -------  --------  ---------  -------  --------
+pm-ayudarg-ccs            129       88         41          383.0    394.0     -11.0      12356.0  8659.0    3697.0     0        0       
+auditor-ayudarg-ca        24        12         12          1963.0   2796.0    -833.0     11779.0  8389.0    3390.0     10       8       
+coder-ayudarg-ca          71        49         22          371.0    407.0     -36.0      6584.0   4984.0    1600.0     0        0       
+db-ayudarg-ccs            42        27         15          551.0    703.0     -152.0     5791.0   4745.0    1046.0     1        1       
+coder-ayudarg-ccs         6         0          6           348.0    0         348.0      523.0    0         523.0      0        0       
+sh-ca                     1         0          1           1210.0   0         1210.0     303.0    0         303.0      0        0       
+pm-ayudarg-ca             3         0          3           261.0    0         261.0      196.0    0         196.0      0        0       
+api-images-ccs            6         0          6           55.0     0         55.0       82.0     0         82.0       0        0       
+auditor-ayudarg-ccs       5         5          0           755.0    755.0     0.0        944.0    944.0     0.0        0        0       
+draandreaesparza-com-ccs  1         1          0           224.0    224.0     0.0        56.0     56.0      0.0        0        0       
+pm-ayudem-ccs             1         1          0           50.0     50.0      0.0        13.0     13.0      0.0        0        0       
+websites-ccs              1         1          0           988.0    988.0     0.0        247.0    247.0     0.0        0        0       
+llmmsg-ccs                6         12         -6          703.0    453.0     250.0      1055.0   1360.0    -305.0     0        0       
+llmmsg-ca                 2         7          -5          534.0    443.0     91.0       267.0    776.0     -509.0     0        0       
+pluto-coder-ca            3         10         -7          1062.0   712.0     350.0      797.0    1780.0    -983.0     0        0       
+mars-audit-ca             5         10         -5          1155.0   1055.0    100.0      1444.0   2636.0    -1192.0    0        1       
+mars-coder-ca             10        16         -6          463.0    603.0     -140.0     1158.0   2410.0    -1252.0    0        0       
+pluto-coder-ccs           11        15         -4          560.0    745.0     -185.0     1540.0   2795.0    -1255.0    0        0       
+mars-db-ccs               3         12         -9          1212.0   890.0     322.0      909.0    2670.0    -1761.0    1        0       
+pluto-db-ccs              14        22         -8          622.0    717.0     -95.0      2178.0   3942.0    -1764.0    0        1       
+mars-coder-ccs            6         14         -8          503.0    850.0     -347.0     754.0    2977.0    -2223.0    0        1       
+mars-pm-ccs               34        58         -24         344.0    369.0     -25.0      2928.0   5352.0    -2424.0    0        0       
+pluto-audit-ca            2         13         -11         2975.0   1261.0    1714.0     1488.0   4098.0    -2610.0    1        2       
+pluto-pm-ccs              31        55         -24         826.0    852.0     -26.0      6405.0   11716.0   -5311.0    1        1       
+
+
+Audit snapshot saved (guide v2.0)

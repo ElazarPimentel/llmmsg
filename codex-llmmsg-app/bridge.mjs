@@ -38,6 +38,28 @@ const HUB_URL = process.env.LLMMSG_HUB_URL || 'http://127.0.0.1:9701';
 
 import http from 'node:http';
 
+function hubRegister(agent, cwd) {
+  if (!cwd) return Promise.resolve();
+  const data = JSON.stringify({ agent, cwd, old_agent: null });
+  return new Promise((resolve, reject) => {
+    const req = http.request(`${HUB_URL}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+    }, (res) => {
+      if (res.statusCode && res.statusCode >= 400) {
+        const chunks = [];
+        res.on('data', chunk => chunks.push(chunk));
+        res.on('end', () => reject(new Error(`hub register failed: ${res.statusCode} ${Buffer.concat(chunks).toString('utf8')}`)));
+        return;
+      }
+      res.resume();
+      resolve();
+    });
+    req.on('error', reject);
+    req.end(data);
+  });
+}
+
 function hubReadAck(agent, throughId) {
   const data = JSON.stringify({ agent, through_id: throughId });
   return new Promise((resolve) => {
@@ -79,34 +101,43 @@ async function registerAgent(agent, { threadId, cwd, latest } = {}) {
   const client = new CodexRpcClient({ url: APP_SERVER_URL });
   await client.connect();
 
-  let resolvedThreadId = threadId;
-  if (!resolvedThreadId) {
-    const loaded = await listLoadedThreads(client);
-    const threads = [];
-    for (const id of loaded) {
-      const thread = await readThread(client, id);
-      threads.push(thread);
+  try {
+    let resolvedThread = null;
+    let resolvedThreadId = threadId;
+    if (!resolvedThreadId) {
+      const loaded = await listLoadedThreads(client);
+      const threads = [];
+      for (const id of loaded) {
+        const thread = await readThread(client, id);
+        threads.push(thread);
+      }
+      let filtered = threads;
+      if (cwd) filtered = filtered.filter((thread) => thread.cwd === cwd);
+      if (!filtered.length) filtered = threads;
+      filtered.sort((a, b) => b.updatedAt - a.updatedAt);
+      if (!filtered.length) {
+        throw new Error('no loaded thread matches registration query');
+      }
+      resolvedThread = filtered[0];
+      resolvedThreadId = resolvedThread.id;
+    } else if (!cwd) {
+      resolvedThread = await readThread(client, resolvedThreadId);
     }
-    let filtered = threads;
-    if (cwd) filtered = filtered.filter((thread) => thread.cwd === cwd);
-    if (!filtered.length) filtered = threads;
-    filtered.sort((a, b) => b.updatedAt - a.updatedAt);
-    if (!filtered.length) {
-      throw new Error('no loaded thread matches registration query');
-    }
-    resolvedThreadId = filtered[0].id;
-  }
 
-  const registry = loadRegistry();
-  registry[agent] = {
-    threadId: resolvedThreadId,
-    registeredAt: new Date().toISOString(),
-    cwd: cwd || null,
-    // clear any suspension — registration is always authoritative
-  };
-  saveRegistry(registry);
-  await client.close();
-  return registry[agent];
+    const registry = loadRegistry();
+    const resolvedCwd = cwd || resolvedThread?.cwd || registry[agent]?.cwd || null;
+    registry[agent] = {
+      threadId: resolvedThreadId,
+      registeredAt: new Date().toISOString(),
+      cwd: resolvedCwd,
+      // clear any suspension — registration is always authoritative
+    };
+    saveRegistry(registry);
+    await hubRegister(agent, resolvedCwd);
+    return registry[agent];
+  } finally {
+    await client.close();
+  }
 }
 
 async function deliverUnread(agent) {

@@ -1,118 +1,113 @@
-daily-comms-audit.sh v1.4
-Report file: /opt/llmmsg/sqlite-report/2026-04-07-llmmsg-sqlite-repor.txt
+daily-comms-audit.sh v1.7
+Report file: /opt/llmmsg/sqlite-report/2026-04-07-llmmsg-sqlite-report.txt
 
 === Last 24h Communications Audit ===
-Median avg chars/message: 761.0
-Average avg chars/message: 815.0
+Median avg chars/message: 560.0
+Average avg chars/message: 622.0
 
 --- Per-Agent Efficiency ---
-sender           msgs  avg_chars  max_chars  total_chars  est_tokens  replies  initiated  avg_reply_chars  avg_init_chars  over_2k  has_summary_and_details  has_summary_and_message
----------------  ----  ---------  ---------  -----------  ----------  -------  ---------  ---------------  --------------  -------  -----------------------  -----------------------
-pluto-pm-ccs     110   858.0      3614       94415        23604.0     15       95         588.0            901.0           4        0                        0                      
-pluto-audit-ca   35    1380.0     6177       48307        12077.0     20       15         1446.0           1292.0          5        0                        0                      
-mars-pm-ccs      69    408.0      1821       28183        7046.0      9        60         247.0            433.0           0        0                        0                      
-pluto-coder-ccs  34    761.0      2085       25863        6466.0      34       0          761.0                            1        0                        0                      
-mars-audit-ca    13    1594.0     4333       20721        5180.0      6        7          2122.0           1142.0          5        0                        0                      
-pluto-db-ccs     36    564.0      2833       20291        5073.0      35       1          567.0            456.0           1        0                        0                      
-mars-coder-ccs   30    579.0      4082       17381        4345.0      29       1          591.0            253.0           1        0                        0                      
-mars-db-ccs      20    670.0      1636       13393        3348.0      13       7          409.0            1154.0          0        0                        0                      
-pluto-coder-ca   23    566.0      1805       13011        3253.0      12       11         790.0            321.0           0        0                        0                      
-llmmsg-ca        8     994.0      3199       7954         1989.0      0        8                           994.0           1        0                        0                      
-llmmsg-ccs       6     1029.0     1944       6173         1543.0      4        2          1009.0           1068.0          0        0                        0                      
-mars-coder-ca    7     779.0      1635       5451         1363.0      7        0          779.0                            0        0                        0                      
-codex-temp       1     412.0      412        412          103.0       0        1                           412.0           0        0                        0                      
+sender               msgs  avg_chars  max_chars  total_chars  est_tokens  replies  initiated  avg_reply_chars  avg_init_chars  over_2k  has_summary_and_details  has_summary_and_message
+-------------------  ----  ---------  ---------  -----------  ----------  -------  ---------  ---------------  --------------  -------  -----------------------  -----------------------
+pluto-pm-ccs         79    900.0      3264       71134        17784.0     15       64         679.0            952.0           2        0                        0                      
+pluto-audit-ca       22    1539.0     6177       33861        8465.0      7        15         2068.0           1292.0          4        0                        0                      
+mars-pm-ccs          61    360.0      1035       21956        5489.0      6        55         260.0            371.0           0        0                        0                      
+pluto-db-ccs         33    560.0      2833       18464        4616.0      31       2          560.0            558.0           1        0                        0                      
+pluto-coder-ccs      21    785.0      1679       16476        4119.0      21       0          785.0                            0        0                        0                      
+mars-coder-ccs       28    565.0      4082       15825        3956.0      27       1          577.0            253.0           1        0                        0                      
+pluto-coder-ca       23    566.0      1805       13011        3253.0      12       11         790.0            321.0           0        0                        0                      
+mars-db-ccs          17    681.0      1636       11585        2896.0      11       6          381.0            1232.0          0        0                        0                      
+pm-ayudarg-ccs       28    391.0      1364       10949        2737.0      8        20         260.0            444.0           0        0                        0                      
+mars-audit-ca        9     1196.0     2484       10761        2690.0      2        7          1385.0           1142.0          2        0                        0                      
+mars-coder-ca        7     779.0      1635       5451         1363.0      7        0          779.0                            0        0                        0                      
+coder-ayudarg-ca     10    511.0      1241       5109         1277.0      10       0          511.0                            0        0                        0                      
+db-ayudarg-ccs       9     545.0      1048       4904         1226.0      8        1          482.0            1048.0          0        0                        0                      
+llmmsg-ccs           11    419.0      1028       4610         1153.0      5        6          287.0            529.0           0        0                        0                      
+auditor-ayudarg-ccs  5     755.0      1387       3777         944.0       5        0          755.0                            0        0                        0                      
+llmmsg-ca            6     444.0      631        2666         667.0       3        3          477.0            412.0           0        0                        0                      
+codex-temp           1     412.0      412        412          103.0       0        1                           412.0           0        0                        0                      
+llmmsg               1     359.0      359        359          90.0        0        1                           359.0           0        0                        0                      
+pm-ayudem-ccs        1     50.0       50         50           13.0        0        1                           50.0            0        0                        0                      
+
+--- Top Conversation Pairs ---
+pair                             msgs  chars  est_tokens
+-------------------------------  ----  -----  ----------
+pluto-audit-ca -> pluto-pm-ccs   18    30615  7654.0    
+pluto-pm-ccs -> pluto-coder-ccs  27    29994  7499.0    
+pluto-coder-ccs -> pluto-pm-ccs  19    15054  3764.0    
+mars-coder-ccs -> mars-pm-ccs    26    14755  3689.0    
+pluto-pm-ccs -> pluto-audit-ca   14    13465  3366.0    
+mars-pm-ccs -> mars-coder-ccs    31    13017  3254.0    
+mars-audit-ca -> mars-pm-ccs     8     10091  2523.0    
+pluto-coder-ca -> pluto-pm-ccs   13    9701   2425.0    
 
 --- Flagged: Messages over 2000 chars ---
-id    sender           recipient        tag                   chars  preview                                                                         
-----  ---------------  ---------------  --------------------  -----  --------------------------------------------------------------------------------
-2196  pluto-audit-ca   pluto-pm-ccs     pluto-audit-ca-2196   6177   {"report":"Deep scan findings by impact.\n\nA) Node work that should move closer
+id    sender          recipient        tag                  chars  preview                                                                         
+----  --------------  ---------------  -------------------  -----  --------------------------------------------------------------------------------
+2196  pluto-audit-ca  pluto-pm-ccs     pluto-audit-ca-2196  6177   {"report":"Deep scan findings by impact.\n\nA) Node work that should move closer
 
-2138  mars-audit-ca    mars-pm-ccs      mars-audit-ca-2138    4333   Findings:                                                                       
-                                                                                                                                                     
-                                                                     1. Headers are inconsistent and not round-trip friendly. Teachers fil           
+2341  mars-coder-ccs  mars-pm-ccs      mars-coder-ccs-2341  4082   Full plan. 10 source files + 2 DB/doc files reference `submittedAt`.            
+                                                                                                                                                   
+                                                                   ## Part 1:                                                                      
 
-2341  mars-coder-ccs   mars-pm-ccs      mars-coder-ccs-2341   4082   Full plan. 10 source files + 2 DB/doc files reference `submittedAt`.            
-                                                                                                                                                     
-                                                                     ## Part 1:                                                                      
+2197  pluto-pm-ccs    pluto-coder-ccs  pluto-pm-ccs-2197    3264   Deep scan results from audit. Prioritized fixes below. Do them in order, push af
 
-2119  pluto-pm-ccs     pluto-coder-ccs  pluto-pm-ccs-2119     3614   CR-41: Ayudante data visibility & parity with JTP. Two bugs, one root cause. Pri
+2266  pluto-audit-ca  pluto-pm-ccs     pluto-audit-ca-2266  3026   {"body":"PLAN 70 scan: teacher-facing student surfaces that could benefit from p
 
-2197  pluto-pm-ccs     pluto-coder-ccs  pluto-pm-ccs-2197     3264   Deep scan results from audit. Prioritized fixes below. Do them in order, push af
+2330  pluto-db-ccs    pluto-pm-ccs     pluto-db-ccs-2330    2833   DB agent response to naming convention proposal.                                
+                                                                                                                                                   
+                                                                   ## 1. Agreement                                                                 
+                                                                                                                                                   
+                                                                   Agree with al                                                                   
 
-2092  llmmsg-ca        llmmsg-ccs       llmmsg-ca-2092        3199   Guide v1.9 is live. User wants us to compare two tighter candidate rewrites and 
+2171  pluto-pm-ccs    pluto-coder-ccs  pluto-pm-ccs-2171    2607   New feature: Create user form route + access request workflow refactor.         
+                                                                                                                                                   
+                                                                   ## 1. N                                                                         
 
-2266  pluto-audit-ca   pluto-pm-ccs     pluto-audit-ca-2266   3026   {"body":"PLAN 70 scan: teacher-facing student surfaces that could benefit from p
+2415  mars-audit-ca   mars-pm-ccs      mars-audit-ca-2415   2484   {"recommendation":"Use one unified form with a resolved practice context layer. 
 
-2330  pluto-db-ccs     pluto-pm-ccs     pluto-db-ccs-2330     2833   DB agent response to naming convention proposal.                                
-                                                                                                                                                     
-                                                                     ## 1. Agreement                                                                 
-                                                                                                                                                     
-                                                                     Agree with al                                                                   
+2398  pluto-audit-ca  pluto-pm-ccs     pluto-audit-ca-2398  2440   {"body":"Section-title audit: this is not a Tailwind-config problem and not one 
 
-2171  pluto-pm-ccs     pluto-coder-ccs  pluto-pm-ccs-2171     2607   New feature: Create user form route + access request workflow refactor.         
-                                                                                                                                                     
-                                                                     ## 1. N                                                                         
+2186  mars-audit-ca   mars-pm-ccs      mars-audit-ca-2186   2361   Findings:                                                                       
+                                                                                                                                                   
+                                                                   1. High: the regenerated student TSV is not round-trip importable by            
 
-2415  mars-audit-ca    mars-pm-ccs      mars-audit-ca-2415    2484   {"recommendation":"Use one unified form with a resolved practice context layer. 
-
-2069  mars-audit-ca    mars-pm-ccs      mars-audit-ca-2069    2466   {"type":"review","from":"mars-audit-ca","body":"Findings:\n\n1. High: text chips
-
-2398  pluto-audit-ca   pluto-pm-ccs     pluto-audit-ca-2398   2440   {"body":"Section-title audit: this is not a Tailwind-config problem and not one 
-
-2186  mars-audit-ca    mars-pm-ccs      mars-audit-ca-2186    2361   Findings:                                                                       
-                                                                                                                                                     
-                                                                     1. High: the regenerated student TSV is not round-trip importable by            
-
-2150  pluto-pm-ccs     pluto-coder-ccs  pluto-pm-ccs-2150     2287   New feature: Access request detail routes.                                      
-                                                                                                                                                     
-                                                                     ## What to build                                                                
-                                                                                                                                                     
-                                                                     1. **`/admin/solic                                                              
-
-2353  pluto-audit-ca   pluto-pm-ccs     pluto-audit-ca-2353   2195   {"body":"Audit on /practicas/nueva: the label/value ambiguity is real and comes 
-
-2134  mars-audit-ca    mars-pm-ccs      mars-audit-ca-2134    2144   I found the bug class, but not a checked-in Mars import script that currently co
-
-2120  pluto-coder-ccs  pluto-pm-ccs     pluto-coder-ccs-2120  2085   CR-41 done. Pushed as v1.7.0.                                                   
-                                                                                                                                                     
-                                                                     ## What changed                                                                 
-                                                                                                                                                     
-                                                                     1. **`DataAccessScope` teacher v                                                
-
-2085  pluto-audit-ca   pluto-coder-ccs  pluto-audit-ca-2085   2083   {"from":"pluto-audit-ca","review_findings":[{"severity":"high","summary":"The ne
+2353  pluto-audit-ca  pluto-pm-ccs     pluto-audit-ca-2353  2195   {"body":"Audit on /practicas/nueva: the label/value ambiguity is real and comes 
 
 --- Flagged: Duplicate summary+details pattern ---
 
 --- Flagged: Agents 2x above median avg chars ---
-sender         msgs  avg_chars  vs_median
--------------  ----  ---------  ---------
-mars-audit-ca  13    1594.0     2.1      
+sender          msgs  avg_chars  vs_median
+--------------  ----  ---------  ---------
+pluto-audit-ca  22    1539.0     2.7      
+mars-audit-ca   9     1196.0     2.1      
 
 --- Flagged: One-off type values (used only once in 24h) ---
-type             sender         tag               
----------------  -------------  ------------------
-review           mars-audit-ca  mars-audit-ca-2069
-review-followup  mars-audit-ca  mars-audit-ca-2073
 
 --- Summary ---
-{"period":"24h","total_messages":392,"total_chars":301555,"est_tokens":75389.0,"median_avg_chars":761.0,"agents_above_2x_median":1}
+{"period":"24h","total_messages":372,"total_chars":251360,"est_tokens":62840.0,"median_avg_chars":560.0,"agents_above_2x_median":2}
 
---- Comparison vs Last Audit (2026-04-07 18:01:51, guide v2.0) ---
-agent            msgs_now  msgs_prev  msgs_delta  avg_now  avg_prev  avg_delta  tok_now  tok_prev  tok_delta  big_now  big_prev
----------------  --------  ---------  ----------  -------  --------  ---------  -------  --------  ---------  -------  --------
-codex-temp       1         1          0           412.0    412.0     0.0        103.0    103.0     0.0        0        0       
-llmmsg-ca        8         8          0           994.0    994.0     0.0        1989.0   1989.0    0.0        1        1       
-llmmsg-ccs       6         6          0           1029.0   1029.0    0.0        1543.0   1543.0    0.0        0        0       
-mars-audit-ca    13        13         0           1594.0   1594.0    0.0        5180.0   5180.0    0.0        5        5       
-mars-coder-ca    7         7          0           779.0    779.0     0.0        1363.0   1363.0    0.0        0        0       
-mars-coder-ccs   30        30         0           579.0    579.0     0.0        4345.0   4345.0    0.0        1        1       
-mars-db-ccs      20        20         0           670.0    670.0     0.0        3348.0   3348.0    0.0        0        0       
-mars-pm-ccs      69        69         0           408.0    408.0     0.0        7046.0   7046.0    0.0        0        0       
-pluto-audit-ca   35        35         0           1380.0   1380.0    0.0        12077.0  12077.0   0.0        5        5       
-pluto-coder-ca   23        23         0           566.0    566.0     0.0        3253.0   3253.0    0.0        0        0       
-pluto-coder-ccs  34        34         0           761.0    761.0     0.0        6466.0   6466.0    0.0        1        1       
-pluto-db-ccs     36        36         0           564.0    564.0     0.0        5073.0   5073.0    0.0        1        1       
-pluto-pm-ccs     110       110        0           858.0    858.0     0.0        23604.0  23604.0   0.0        4        4       
+--- Comparison vs Last Audit (2026-04-07 20:31:24, guide v2.0) ---
+agent                msgs_now  msgs_prev  msgs_delta  avg_now  avg_prev  avg_delta  tok_now  tok_prev  tok_delta  big_now  big_prev
+-------------------  --------  ---------  ----------  -------  --------  ---------  -------  --------  ---------  -------  --------
+pm-ayudarg-ccs       28        0          28          391.0    0         391.0      2737.0   0         2737.0     0        0       
+coder-ayudarg-ca     10        0          10          511.0    0         511.0      1277.0   0         1277.0     0        0       
+db-ayudarg-ccs       9         0          9           545.0    0         545.0      1226.0   0         1226.0     0        0       
+auditor-ayudarg-ccs  5         0          5           755.0    0         755.0      944.0    0         944.0      0        0       
+pluto-db-ccs         33        33         0           560.0    518.0     42.0       4616.0   4277.0    339.0      1        1       
+pm-ayudem-ccs        1         0          1           50.0     0         50.0       13.0     0         13.0       0        0       
+codex-temp           1         1          0           412.0    412.0     0.0        103.0    103.0     0.0        0        0       
+llmmsg               1         1          0           359.0    359.0     0.0        90.0     90.0      0.0        0        0       
+mars-coder-ca        7         7          0           779.0    779.0     0.0        1363.0   1363.0    0.0        0        0       
+pluto-coder-ca       23        23         0           566.0    566.0     0.0        3253.0   3253.0    0.0        0        0       
+llmmsg-ca            6         6          0           444.0    450.0     -6.0       667.0    675.0     -8.0       0        0       
+mars-coder-ccs       28        29         -1          565.0    565.0     0.0        3956.0   4096.0    -140.0     1        1       
+llmmsg-ccs           11        11         0           419.0    523.0     -104.0     1153.0   1439.0    -286.0     0        0       
+mars-db-ccs          17        20         -3          681.0    670.0     11.0       2896.0   3348.0    -452.0     0        0       
+mars-pm-ccs          61        66         -5          360.0    390.0     -30.0      5489.0   6438.0    -949.0     0        0       
+mars-audit-ca        9         11         -2          1196.0   1567.0    -371.0     2690.0   4310.0    -1620.0    2        4       
+pluto-coder-ccs      21        32         -11         785.0    736.0     49.0       4119.0   5890.0    -1771.0    0        1       
+pluto-audit-ca       22        32         -10         1539.0   1332.0    207.0      8465.0   10657.0   -2192.0    4        4       
+pluto-pm-ccs         79        100        -21         900.0    879.0     21.0       17784.0  21984.0   -4200.0    2        4       
 
 
 Audit snapshot saved (guide v2.0)

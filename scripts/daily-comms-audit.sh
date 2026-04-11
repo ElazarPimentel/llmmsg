@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="1.6"
+VERSION="1.7"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
 REPORT_DIR="${LLMMSG_REPORT_DIR:-/opt/llmmsg/sqlite-report}"
@@ -88,6 +88,22 @@ sqlite3 -header -column "$DB" "
     AND retracted_at IS NULL
   GROUP BY sender
   ORDER BY total_chars DESC;
+"
+
+echo ""
+echo "--- Top Conversation Pairs ---"
+sqlite3 -header -column "$DB" "
+  SELECT
+    sender || ' -> ' || recipient AS pair,
+    COUNT(*) AS msgs,
+    SUM(LENGTH(body)) AS chars,
+    ROUND(SUM(LENGTH(body)) / 4.0) AS est_tokens
+  FROM messages
+  WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+    AND retracted_at IS NULL
+  GROUP BY sender, recipient
+  ORDER BY chars DESC
+  LIMIT 8;
 "
 
 echo ""
