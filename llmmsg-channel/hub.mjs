@@ -14,6 +14,7 @@ const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
 const SITE_NAME = process.env.LLMMSG_SITE || '';
 const REMOTE_HUBS_JSON = process.env.LLMMSG_REMOTE_HUBS || ''; // JSON: {"lezama":"http://10.78.42.168:9701"}
 const INBOUND_SECRET = process.env.LLMMSG_INBOUND_SECRET || ''; // shared secret for /inbound auth
+const SITE_SUFFIX = process.env.LLMMSG_SITE_SUFFIX || ''; // required agent name suffix (e.g. -l)
 const BRIDGE_REGISTRY_PATH = new URL('../codex-llmmsg-app/registrations.json', import.meta.url);
 
 if (!existsSync(DB_PATH)) {
@@ -417,6 +418,13 @@ const server = http.createServer(async (req, res) => {
       if (!agent || !cwd) {
         res.writeHead(400);
         res.end(JSON.stringify({ error: 'missing agent or cwd' }));
+        return;
+      }
+
+      // Enforce site suffix if configured
+      if (SITE_SUFFIX && !agent.endsWith(SITE_SUFFIX)) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: `agent name must end with '${SITE_SUFFIX}' on this site. Register as '${agent}${SITE_SUFFIX}' instead.` }));
         return;
       }
 

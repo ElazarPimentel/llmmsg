@@ -13,6 +13,7 @@ Environment=LLMMSG_HUB_PORT=9701
 #Environment=LLMMSG_SITE=whey
 #Environment=LLMMSG_REMOTE_HUBS={"lezama":"http://10.78.42.168:9701"}
 #Environment=LLMMSG_INBOUND_SECRET=your-shared-secret-here
+#Environment=LLMMSG_SITE_SUFFIX=-l
 ExecStart=/usr/bin/node /opt/llmmsg/llmmsg-channel/hub.mjs
 Restart=on-failure
 RestartSec=3
