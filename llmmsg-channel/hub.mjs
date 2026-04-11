@@ -436,9 +436,12 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // Reject if another session already has an active SSE connection for this agent
+      // Reject if a *different* session already has an active SSE connection for this agent.
+      // old_agent === agent means same session re-registering (normal after unregister+register).
+      // old_agent is a different name means SSE migration (also normal).
+      // No old_agent AND existing SSE means a second session is trying to claim the name.
       const existingSSE = channels.get(agent);
-      if (existingSSE && (!old_agent || old_agent === agent)) {
+      if (existingSSE && !old_agent) {
         res.writeHead(409);
         res.end(JSON.stringify({ error: `agent '${agent}' already has an active session. Kill the other session first or use a different name.` }));
         return;
