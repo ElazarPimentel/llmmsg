@@ -47,6 +47,12 @@ try {
   if (cols.includes('last_id') || cols.includes('delivered_id')) {
     try {
       db.exec(`BEGIN IMMEDIATE`);
+      // Drop views that depend on cursors before replacing the table
+      const depViews = db.prepare(
+        `SELECT name FROM sqlite_master WHERE type='view' AND sql LIKE '%cursors%'`
+      ).all().map(r => r.name);
+      for (const v of depViews) db.exec(`DROP VIEW IF EXISTS ${v}`);
+
       db.exec(`
         CREATE TABLE cursors_new (
           agent   TEXT PRIMARY KEY,
@@ -57,6 +63,30 @@ try {
           FROM cursors;
         DROP TABLE cursors;
         ALTER TABLE cursors_new RENAME TO cursors;
+      `);
+
+      // Recreate dropped views with new schema
+      db.exec(`
+        CREATE VIEW IF NOT EXISTS v_overview AS
+        SELECT
+          (SELECT COUNT(*) FROM messages) AS total_messages,
+          (SELECT COUNT(DISTINCT sender) FROM messages) AS unique_senders,
+          (SELECT COUNT(DISTINCT recipient) FROM messages) AS unique_recipients,
+          (SELECT COUNT(*) FROM cursors) AS registered_agents,
+          (SELECT ROUND(AVG(LENGTH(body))) FROM messages) AS avg_body_chars,
+          (SELECT COUNT(*) FROM messages WHERE recipient = '*') AS broadcasts,
+          (SELECT COUNT(*) FROM messages WHERE re IS NOT NULL) AS replies;
+
+        CREATE VIEW IF NOT EXISTS v_agent_cursors AS
+        SELECT
+          c.agent,
+          c.read_id,
+          (SELECT MAX(id) FROM messages) AS latest_msg_id,
+          (SELECT MAX(id) FROM messages) - c.read_id AS behind_by,
+          (SELECT COUNT(*) FROM messages
+           WHERE (recipient = c.agent OR recipient = '*') AND id > c.read_id) AS unread
+        FROM cursors c
+        ORDER BY behind_by DESC;
       `);
       db.exec(`COMMIT`);
       console.log('[migrate] cursors table unified to read_id only');
