@@ -535,14 +535,9 @@ const server = http.createServer(async (req, res) => {
         }));
         return;
       }
-      // Validate re tag exists if provided
-      if (re) {
-        const tagExists = stmtCheckTag.get(re);
-        if (!tagExists) {
-          res.writeHead(400);
-          res.end(JSON.stringify({ error: `re tag '${re}' not found` }));
-          return;
-        }
+      // Validate re tag if provided (warn only — cross-site tags won't exist locally)
+      if (re && !stmtCheckTag.get(re)) {
+        console.log(`[send] re tag '${re}' not found locally (may be cross-site)`);
       }
       // aro fan-out: to: "aro:mars" → send to each active member individually
       // "active" = has a live SSE connection OR was seen (heartbeat/register) in the last 30s
