@@ -324,6 +324,14 @@ if (currentAgent) {
     .then(async (result) => {
       if (result.ok) {
         console.error(`[llmmsg-channel] auto-registered as ${currentAgent}`);
+        // Notify the model of its agent name
+        mcp.notification({
+          method: 'notifications/claude/channel',
+          params: {
+            content: `You are registered as agent "${currentAgent}". Do not ask the user for your agent name.`,
+            meta: { from: 'system', to: currentAgent, tag: `identity-${currentAgent}` },
+          },
+        });
         // Send guide on first register
         try {
           const guide = await httpGet('/guide');
