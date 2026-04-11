@@ -13,5 +13,10 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
     "better-sqlite3": "^12.8.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   }
 }

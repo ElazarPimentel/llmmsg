@@ -82,6 +82,7 @@ CREATE TABLE outbox (
 );
 
 CREATE INDEX idx_recv ON messages(recipient, id);
+CREATE INDEX idx_origin_tag ON messages(origin_tag) WHERE origin_tag IS NOT NULL;
 
 -- Seed message guide
 INSERT INTO config (key, value, version) VALUES ('message_guide',
