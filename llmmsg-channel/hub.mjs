@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '2.4';
+const VERSION = '2.5';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
 const BRIDGE_REGISTRY_PATH = new URL('../codex-llmmsg-app/registrations.json', import.meta.url);
@@ -21,74 +21,63 @@ const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('busy_timeout = 5000');
 
-// Ensure tables exist
-db.exec(`
-  CREATE TABLE IF NOT EXISTS messages (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts        TEXT    NOT NULL DEFAULT (strftime('%s','now')),
-    sender    TEXT    NOT NULL,
-    recipient TEXT    NOT NULL,
-    tag       TEXT    NOT NULL UNIQUE,
-    re        TEXT,
-    body      TEXT    NOT NULL,
-    retracted_at TEXT,
-    retracted_by TEXT
-  );
-  CREATE TABLE IF NOT EXISTS cursors (
-    agent   TEXT    PRIMARY KEY,
-    last_id INTEGER NOT NULL DEFAULT 0
-  );
-  CREATE TABLE IF NOT EXISTS roster (
-    agent         TEXT PRIMARY KEY,
-    cwd           TEXT NOT NULL,
-    registered_at TEXT NOT NULL DEFAULT (strftime('%s','now'))
-  );
-  CREATE TABLE IF NOT EXISTS thread_map (
-    agent      TEXT NOT NULL,
-    cwd        TEXT NOT NULL,
-    thread_id  TEXT NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
-    PRIMARY KEY (agent, cwd)
-  );
-  CREATE INDEX IF NOT EXISTS idx_recv ON messages(recipient, id);
-  CREATE TABLE IF NOT EXISTS aros (
-    aro   TEXT NOT NULL,
-    agent TEXT NOT NULL,
-    PRIMARY KEY (aro, agent)
-  );
-`);
+// Verify required tables exist (schema is managed by init-db.sh)
+{
+  const required = ['messages', 'cursors', 'roster', 'aros', 'config'];
+  const existing = new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type='table'`).all().map(r => r.name));
+  const missing = required.filter(t => !existing.has(t));
+  if (missing.length) {
+    console.error(`Missing tables: ${missing.join(', ')}. Run scripts/init-db.sh first.`);
+    process.exit(1);
+  }
+}
 
-for (const columnSql of [
-  `ALTER TABLE cursors ADD COLUMN delivered_id INTEGER NOT NULL DEFAULT 0`,
-  `ALTER TABLE cursors ADD COLUMN read_id INTEGER NOT NULL DEFAULT 0`,
-  `ALTER TABLE roster ADD COLUMN last_seen_at INTEGER NOT NULL DEFAULT 0`,
-]) {
-  try {
-    db.exec(columnSql);
-  } catch (error) {
-    if (!String(error.message).includes('duplicate column name')) {
-      throw error;
+// Migrate: ensure last_seen_at exists on roster
+try {
+  db.exec(`ALTER TABLE roster ADD COLUMN last_seen_at INTEGER NOT NULL DEFAULT 0`);
+} catch (error) {
+  if (!String(error.message).includes('duplicate column name')) throw error;
+}
+
+// Migrate legacy cursors: collapse last_id/delivered_id/read_id into read_id only.
+// After migration, read_id = MAX(old last_id, old delivered_id, old read_id).
+// Uses IMMEDIATE transaction to fail fast if bridge holds a lock (restart bridge first).
+{
+  const cols = db.pragma('table_info(cursors)').map(c => c.name);
+  if (cols.includes('last_id') || cols.includes('delivered_id')) {
+    try {
+      db.exec(`BEGIN IMMEDIATE`);
+      db.exec(`
+        CREATE TABLE cursors_new (
+          agent   TEXT PRIMARY KEY,
+          read_id INTEGER NOT NULL DEFAULT 0
+        );
+        INSERT OR REPLACE INTO cursors_new (agent, read_id)
+          SELECT agent, MAX(COALESCE(delivered_id, 0), COALESCE(read_id, 0), COALESCE(last_id, 0))
+          FROM cursors;
+        DROP TABLE cursors;
+        ALTER TABLE cursors_new RENAME TO cursors;
+      `);
+      db.exec(`COMMIT`);
+      console.log('[migrate] cursors table unified to read_id only');
+    } catch (err) {
+      try { db.exec(`ROLLBACK`); } catch {}
+      console.error(`[migrate] cursor migration failed (restart bridge first?): ${err.message}`);
+      process.exit(1);
     }
   }
 }
 
-db.exec(`
-  UPDATE cursors
-  SET
-    delivered_id = CASE WHEN delivered_id = 0 THEN last_id ELSE delivered_id END,
-    read_id = CASE WHEN read_id = 0 THEN last_id ELSE read_id END
-`);
+function safeParse(str) {
+  try { return JSON.parse(str); } catch { return str; }
+}
 
 // Prepared statements
 const stmtInsertMsg = db.prepare(
   `INSERT INTO messages (sender, recipient, tag, re, body) VALUES (?, ?, '_pending', ?, ?) RETURNING id`
 );
 const stmtUpdateTag = db.prepare(`UPDATE messages SET tag = ? WHERE id = ?`);
-const stmtRead = db.prepare(
-  `SELECT id, sender, recipient, tag, re, body FROM messages
-   WHERE (recipient = ? OR recipient = '*') AND id > ? AND retracted_at IS NULL ORDER BY id`
-);
-const stmtUndelivered = db.prepare(
+const stmtMessagesSince = db.prepare(
   `SELECT id, sender, recipient, tag, re, body FROM messages
    WHERE (recipient = ? OR recipient = '*') AND id > ? AND retracted_at IS NULL ORDER BY id`
 );
@@ -97,22 +86,11 @@ const stmtUnreadCount = db.prepare(
    WHERE (recipient = ? OR recipient = '*') AND id > ? AND retracted_at IS NULL`
 );
 const stmtGetCursor = db.prepare(
-  `SELECT
-      COALESCE(delivered_id, last_id, 0) AS delivered_id,
-      COALESCE(read_id, last_id, 0) AS read_id
-   FROM cursors
-   WHERE agent = ?`
+  `SELECT read_id FROM cursors WHERE agent = ?`
 );
-const stmtUpsertDeliveredCursor = db.prepare(
-  `INSERT INTO cursors (agent, last_id, delivered_id, read_id) VALUES (?, ?, ?, 0)
-   ON CONFLICT(agent) DO UPDATE SET
-     last_id = MAX(cursors.last_id, excluded.last_id),
-     delivered_id = MAX(COALESCE(cursors.delivered_id, cursors.last_id), excluded.delivered_id)`
-);
-const stmtUpsertReadCursor = db.prepare(
-  `INSERT INTO cursors (agent, last_id, delivered_id, read_id) VALUES (?, 0, 0, ?)
-   ON CONFLICT(agent) DO UPDATE SET
-     read_id = MAX(COALESCE(cursors.read_id, cursors.last_id), excluded.read_id)`
+const stmtUpsertCursor = db.prepare(
+  `INSERT INTO cursors (agent, read_id) VALUES (?, ?)
+   ON CONFLICT(agent) DO UPDATE SET read_id = MAX(cursors.read_id, excluded.read_id)`
 );
 const stmtRoster = db.prepare(`SELECT agent, cwd FROM roster ORDER BY agent`);
 const stmtRosterFull = db.prepare(`SELECT agent, cwd, last_seen_at FROM roster ORDER BY agent`);
@@ -141,6 +119,7 @@ const stmtLog = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, retracted_at FROM messages ORDER BY id DESC LIMIT ?`
 );
 const stmtCheckRoster = db.prepare(`SELECT 1 FROM roster WHERE agent = ?`);
+const stmtCheckTag = db.prepare(`SELECT 1 FROM messages WHERE tag = ?`);
 // ARO fanout only targets agents seen in the last 30s (bridge heartbeats every 2s) or with an active SSE connection.
 // Agents that went offline without unregistering are excluded after 30s of inactivity.
 const stmtAroMembersAll = db.prepare(`SELECT agent FROM aros WHERE aro = ? ORDER BY agent`);
@@ -167,27 +146,20 @@ const stmtSetConfig = db.prepare(
 const channels = new Map();
 
 // Poll DB for messages written directly via llmmsg.sh CLI (bypassing hub /send)
-const stmtPollNew = db.prepare(
-  `SELECT id, sender, recipient, tag, re, body FROM messages
-   WHERE (recipient = ? OR recipient = '*') AND id > ? AND retracted_at IS NULL ORDER BY id`
-);
-
 function pollForDirectWrites() {
   for (const [agent] of channels) {
     const cursorRow = stmtGetCursor.get(agent);
-    const lastDeliveredId = cursorRow ? cursorRow.delivered_id : 0;
-    const rows = stmtPollNew.all(agent, lastDeliveredId);
+    const cursorId = cursorRow ? cursorRow.read_id : 0;
+    const rows = stmtMessagesSince.all(agent, cursorId);
     if (!rows.length) continue;
 
-    let maxId = lastDeliveredId;
+    let maxId = cursorId;
     for (const r of rows) {
       if (r.id > maxId) maxId = r.id;
-      let body;
-      try { body = JSON.parse(r.body); } catch { body = r.body; }
-      const event = { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body };
+      const event = { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body) };
       sendToChannel(agent, event);
     }
-    stmtUpsertDeliveredCursor.run(agent, maxId, maxId);
+    stmtUpsertCursor.run(agent, maxId);
   }
 }
 
@@ -197,7 +169,7 @@ function sendToChannel(agent, event) {
   const res = channels.get(agent);
   if (res) {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
-    stmtUpsertDeliveredCursor.run(agent, event.id, event.id);
+    stmtUpsertCursor.run(agent, event.id);
     return true;
   }
   return false;
@@ -207,7 +179,7 @@ function broadcastToChannels(event, excludeSender) {
   for (const [agent, res] of channels) {
     if (agent !== excludeSender) {
       res.write(`data: ${JSON.stringify(event)}\n\n`);
-      stmtUpsertDeliveredCursor.run(agent, event.id, event.id);
+      stmtUpsertCursor.run(agent, event.id);
     }
   }
 }
@@ -219,9 +191,7 @@ const sendMessage = db.transaction((sender, recipient, reTag, body) => {
   const tag = `${sender}-${id}`;
   stmtUpdateTag.run(tag, id);
 
-  let parsed;
-  try { parsed = JSON.parse(body); } catch { parsed = body; }
-  const event = { id, from: sender, to: recipient, tag, re: reTag || null, body: parsed };
+  const event = { id, from: sender, to: recipient, tag, re: reTag || null, body: safeParse(body) };
 
   if (recipient === '*') {
     broadcastToChannels(event, sender);
@@ -234,31 +204,27 @@ const sendMessage = db.transaction((sender, recipient, reTag, body) => {
 
 function readMessages(agent) {
   const cursorRow = stmtGetCursor.get(agent);
-  const lastReadId = cursorRow ? cursorRow.read_id : 0;
-  const rows = stmtRead.all(agent, lastReadId);
+  const cursorId = cursorRow ? cursorRow.read_id : 0;
+  const rows = stmtMessagesSince.all(agent, cursorId);
 
-  let maxId = lastReadId;
+  let maxId = cursorId;
   const messages = rows.map(r => {
     if (r.id > maxId) maxId = r.id;
-    let body;
-    try { body = JSON.parse(r.body); } catch { body = r.body; }
-    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body };
+    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body) };
   });
 
-  if (maxId > lastReadId) {
-    stmtUpsertReadCursor.run(agent, maxId);
+  if (maxId > cursorId) {
+    stmtUpsertCursor.run(agent, maxId);
   }
 
   return messages;
 }
 
-function getUndeliveredMessages(agent) {
+function getUnreadMessages(agent) {
   const cursorRow = stmtGetCursor.get(agent);
-  const lastDeliveredId = cursorRow ? cursorRow.delivered_id : 0;
-  return stmtUndelivered.all(agent, lastDeliveredId).map((r) => {
-    let body;
-    try { body = JSON.parse(r.body); } catch { body = r.body; }
-    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body };
+  const cursorId = cursorRow ? cursorRow.read_id : 0;
+  return stmtMessagesSince.all(agent, cursorId).map((r) => {
+    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body) };
   });
 }
 
@@ -365,7 +331,7 @@ const server = http.createServer(async (req, res) => {
           channels.set(agent, sseRes);
           const oldCursor = stmtGetCursor.get(old_agent);
           if (oldCursor) {
-            stmtUpsertDeliveredCursor.run(agent, oldCursor.delivered_id || oldCursor.read_id || 0, oldCursor.delivered_id || oldCursor.read_id || 0);
+            stmtUpsertCursor.run(agent, oldCursor.read_id);
           }
           console.log(`[register] renamed ${old_agent} → ${agent}`);
         } else {
@@ -378,10 +344,10 @@ const server = http.createServer(async (req, res) => {
       // Deliver any unread messages
       const sseRes = channels.get(agent);
       if (sseRes) {
-        const undelivered = getUndeliveredMessages(agent);
-        for (const msg of undelivered) {
+        const unread = getUnreadMessages(agent);
+        for (const msg of unread) {
           sseRes.write(`data: ${JSON.stringify(msg)}\n\n`);
-          stmtUpsertDeliveredCursor.run(agent, msg.id, msg.id);
+          stmtUpsertCursor.run(agent, msg.id);
         }
       }
 
@@ -424,6 +390,14 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // Reject oversized messages (1MB limit)
+      const msgStr = typeof message === 'string' ? message : JSON.stringify(message);
+      if (Buffer.byteLength(msgStr) > 1_048_576) {
+        res.writeHead(413);
+        res.end(JSON.stringify({ error: 'message body exceeds 1MB limit' }));
+        return;
+      }
+
       // Validate sender is registered
       if (!stmtCheckRoster.get(from)) {
         res.writeHead(400);
@@ -432,6 +406,15 @@ const server = http.createServer(async (req, res) => {
           message: `You are not registered as '${from}'. Ask the user: "What is my agent name for this session?" Then call the register tool with that name.`,
         }));
         return;
+      }
+      // Validate re tag exists if provided
+      if (re) {
+        const tagExists = stmtCheckTag.get(re);
+        if (!tagExists) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: `re tag '${re}' not found` }));
+          return;
+        }
       }
       // aro fan-out: to: "aro:mars" → send to each active member individually
       // "active" = has a live SSE connection OR was seen (heartbeat/register) in the last 30s
@@ -525,8 +508,7 @@ const server = http.createServer(async (req, res) => {
       const rows = stmtThread.all(tag);
       const messages = rows.map(r => {
         if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true };
-        let body; try { body = JSON.parse(r.body); } catch { body = r.body; }
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body) };
       });
       res.end(JSON.stringify(messages));
       return;
@@ -537,8 +519,7 @@ const server = http.createServer(async (req, res) => {
       if (!text) { res.writeHead(400); res.end(JSON.stringify({ error: 'missing q' })); return; }
       const rows = stmtSearch.all(`%${text}%`);
       const messages = rows.map(r => {
-        let body; try { body = JSON.parse(r.body); } catch { body = r.body; }
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body) };
       });
       res.end(JSON.stringify(messages));
       return;
@@ -549,7 +530,7 @@ const server = http.createServer(async (req, res) => {
       const rows = stmtLog.all(limit);
       const messages = rows.map(r => {
         if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true };
-        let body; try { body = JSON.parse(r.body); } catch { body = r.body; }
+        const body = safeParse(r.body);
         const preview = typeof body === 'object' ? (body.summary || body.message || JSON.stringify(body)).slice(0, 120) : String(body).slice(0, 120);
         return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, preview };
       });
@@ -580,7 +561,7 @@ const server = http.createServer(async (req, res) => {
         res.end(JSON.stringify({ error: 'missing agent or through_id' }));
         return;
       }
-      stmtUpsertReadCursor.run(agent, through_id);
+      stmtUpsertCursor.run(agent, through_id);
       stmtUpdateLastSeen.run(agent); // bridge calls this on every delivery cycle — keeps Codex agents fresh
       res.end(JSON.stringify({ ok: true, agent, read_id: through_id }));
       return;
@@ -666,3 +647,26 @@ server.listen(PORT, '127.0.0.1', () => {
   console.log(`llmmsg-channel hub v${VERSION} listening on 127.0.0.1:${PORT}`);
   console.log(`DB: ${DB_PATH}`);
 });
+
+function shutdown() {
+  console.log('[shutdown] closing...');
+  // Close all SSE connections
+  for (const [agent, res] of channels) {
+    res.end();
+    console.log(`[shutdown] closed SSE for ${agent}`);
+  }
+  channels.clear();
+  server.close(() => {
+    db.close();
+    console.log('[shutdown] done');
+    process.exit(0);
+  });
+  // Force exit after 5s if connections won't drain
+  setTimeout(() => {
+    db.close();
+    process.exit(1);
+  }, 5000).unref();
+}
+
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);

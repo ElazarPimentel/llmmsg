@@ -9,9 +9,8 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
-import { execFileSync } from 'node:child_process';
 
-const VERSION = '1.9';
+const VERSION = '2.0';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_URL = `http://127.0.0.1:${HUB_PORT}`;
 const AGENT_CWD = process.env.LLMMSG_CWD || process.cwd();
@@ -403,12 +402,14 @@ function connectToHub() {
 function unregisterSync() {
   if (!currentAgent) return;
   try {
-    execFileSync('curl', [
-      '-s', '-m', '2',
-      '-X', 'POST', `${HUB_URL}/unregister`,
-      '-H', 'Content-Type: application/json',
-      '-d', JSON.stringify({ agent: currentAgent }),
-    ], { timeout: 3000, stdio: 'ignore' });
+    const data = JSON.stringify({ agent: currentAgent });
+    const req = http.request(`${HUB_URL}/unregister`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+      timeout: 2000,
+    });
+    req.on('error', () => {});
+    req.end(data);
   } catch {}
 }
 

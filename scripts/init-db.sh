@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="1.4"
+VERSION="1.5"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -28,16 +28,15 @@ CREATE TABLE messages (
 );
 
 CREATE TABLE cursors (
-    agent        TEXT    PRIMARY KEY,
-    last_id      INTEGER NOT NULL DEFAULT 0,
-    delivered_id INTEGER NOT NULL DEFAULT 0,
-    read_id      INTEGER NOT NULL DEFAULT 0
+    agent   TEXT    PRIMARY KEY,
+    read_id INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE roster (
     agent         TEXT PRIMARY KEY,
     cwd           TEXT NOT NULL,
-    registered_at TEXT NOT NULL DEFAULT (strftime('%s','now'))
+    registered_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
+    last_seen_at  INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE thread_map (
@@ -46,11 +45,6 @@ CREATE TABLE thread_map (
     thread_id  TEXT NOT NULL,
     updated_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
     PRIMARY KEY (agent, cwd)
-);
-
-CREATE TABLE poll_state (
-    agent      TEXT PRIMARY KEY,
-    empty_since TEXT
 );
 
 CREATE TABLE config (
@@ -161,11 +155,11 @@ ORDER BY messages_in_thread DESC;
 CREATE VIEW v_agent_cursors AS
 SELECT
   c.agent,
-  c.last_id,
+  c.read_id,
   (SELECT MAX(id) FROM messages) AS latest_msg_id,
-  (SELECT MAX(id) FROM messages) - c.last_id AS behind_by,
+  (SELECT MAX(id) FROM messages) - c.read_id AS behind_by,
   (SELECT COUNT(*) FROM messages
-   WHERE (recipient = c.agent OR recipient = '*') AND id > c.last_id) AS unread
+   WHERE (recipient = c.agent OR recipient = '*') AND id > c.read_id) AS unread
 FROM cursors c
 ORDER BY behind_by DESC;
 

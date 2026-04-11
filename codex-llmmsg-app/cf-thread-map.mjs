@@ -14,15 +14,14 @@ const BRIDGE_SHIM = '/opt/llmmsg/codex-llmmsg-app/bridge.mjs';
 mkdirSync(path.dirname(MESSAGE_DB_PATH), { recursive: true });
 
 const db = new Database(MESSAGE_DB_PATH);
-db.exec(`
-  CREATE TABLE IF NOT EXISTS thread_map (
-    agent TEXT NOT NULL,
-    cwd TEXT NOT NULL,
-    thread_id TEXT NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
-    PRIMARY KEY (agent, cwd)
-  );
-`);
+// thread_map table is created by init-db.sh — fail fast if missing
+{
+  const exists = db.prepare(`SELECT 1 FROM sqlite_master WHERE type='table' AND name='thread_map'`).get();
+  if (!exists) {
+    console.error('thread_map table missing. Run scripts/init-db.sh first.');
+    process.exit(1);
+  }
+}
 
 const stmtGet = db.prepare(
   'SELECT thread_id FROM thread_map WHERE agent = ? AND cwd = ?',

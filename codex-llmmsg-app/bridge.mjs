@@ -6,7 +6,6 @@ import { CodexRpcClient } from './rpc-client.mjs';
 
 const APP_DIR = path.dirname(new URL(import.meta.url).pathname);
 const REGISTRY_PATH = path.join(APP_DIR, 'registrations.json');
-const STATE_DB = path.join(APP_DIR, 'bridge-state.sqlite');
 const MESSAGE_DB = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
 const APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || 'ws://127.0.0.1:8788';
 
@@ -20,19 +19,6 @@ function loadRegistry() {
 function saveRegistry(registry) {
   fs.writeFileSync(REGISTRY_PATH, JSON.stringify(registry, null, 2));
 }
-
-const stateDb = new Database(STATE_DB);
-stateDb.exec(`
-  CREATE TABLE IF NOT EXISTS delivery_cursor (
-    agent TEXT PRIMARY KEY,
-    last_id INTEGER NOT NULL DEFAULT 0
-  );
-`);
-const getCursor = stateDb.prepare('SELECT last_id FROM delivery_cursor WHERE agent = ?');
-const setCursor = stateDb.prepare(`
-  INSERT INTO delivery_cursor (agent, last_id) VALUES (?, ?)
-  ON CONFLICT(agent) DO UPDATE SET last_id = MAX(delivery_cursor.last_id, excluded.last_id)
-`);
 
 const HUB_URL = process.env.LLMMSG_HUB_URL || 'http://127.0.0.1:9701';
 
@@ -72,7 +58,10 @@ function hubReadAck(agent, throughId) {
   });
 }
 
-const msgDb = new Database(MESSAGE_DB, { readonly: true });
+const msgDb = new Database(MESSAGE_DB);
+msgDb.pragma('journal_mode = WAL');
+msgDb.pragma('busy_timeout = 2000');
+
 const selectUnread = msgDb.prepare(`
   SELECT id, sender, recipient, tag, re, body
   FROM messages
@@ -81,6 +70,15 @@ const selectUnread = msgDb.prepare(`
     AND retracted_at IS NULL
   ORDER BY id
 `);
+const getCursor = msgDb.prepare('SELECT read_id FROM cursors WHERE agent = ?');
+const setCursor = msgDb.prepare(`
+  INSERT INTO cursors (agent, read_id) VALUES (?, ?)
+  ON CONFLICT(agent) DO UPDATE SET read_id = MAX(cursors.read_id, excluded.read_id)
+`);
+
+function safeParse(str) {
+  try { return JSON.parse(str); } catch { return str; }
+}
 
 function buildPrompt(message) {
   const body = typeof message.body === 'string' ? message.body : JSON.stringify(message.body);
@@ -147,24 +145,23 @@ async function deliverUnread(agent) {
     throw new Error(`agent '${agent}' is not registered`);
   }
   if (mapping.suspended) {
-    return { delivered: 0, lastId: getCursor.get(agent)?.last_id || 0 };
+    return { delivered: 0, cursorId: getCursor.get(agent)?.read_id || 0 };
   }
 
-  const lastId = getCursor.get(agent)?.last_id || 0;
-  const rows = selectUnread.all(agent, lastId);
+  const cursorId = getCursor.get(agent)?.read_id || 0;
+  const rows = selectUnread.all(agent, cursorId);
   if (!rows.length) {
-    return { delivered: 0, lastId };
+    return { delivered: 0, cursorId };
   }
 
   const client = new CodexRpcClient({ url: APP_SERVER_URL });
   await client.connect();
 
-  let maxId = lastId;
+  let maxId = cursorId;
   try {
     for (const row of rows) {
       if (row.id > maxId) maxId = row.id;
-      let body;
-      try { body = JSON.parse(row.body); } catch { body = row.body; }
+      const body = safeParse(row.body);
       await client.request('turn/start', {
         threadId: mapping.threadId,
         input: [{ type: 'text', text: buildPrompt({ id: row.id, from: row.sender, to: row.recipient, tag: row.tag, re: row.re, body }), text_elements: [] }],
@@ -176,7 +173,7 @@ async function deliverUnread(agent) {
   } finally {
     await client.close();
   }
-  return { delivered: rows.length, lastId: maxId };
+  return { delivered: rows.length, cursorId: maxId };
 }
 
 // Heartbeat: tell the hub this agent is alive so /online includes bridge-polled agents

@@ -59,21 +59,21 @@ def row_to_msg(r, include_body=True):
 
 def cmd_read(agent):
     con = get_db()
-    row = con.execute("SELECT last_id FROM cursors WHERE agent = ?", (agent,)).fetchone()
-    last_id = row["last_id"] if row else 0
+    row = con.execute("SELECT read_id FROM cursors WHERE agent = ?", (agent,)).fetchone()
+    cursor_id = row["read_id"] if row else 0
 
     rows = con.execute(
         "SELECT id, sender, recipient, tag, re, body FROM messages "
         "WHERE (recipient = ? OR recipient = '*') AND id > ? AND retracted_at IS NULL ORDER BY id",
-        (agent, last_id)
+        (agent, cursor_id)
     ).fetchall()
 
     messages = [row_to_msg(r) for r in rows]
-    max_id = max((r["id"] for r in rows), default=last_id)
+    max_id = max((r["id"] for r in rows), default=cursor_id)
 
     con.execute(
-        "INSERT INTO cursors (agent, last_id) VALUES (?, ?) "
-        "ON CONFLICT(agent) DO UPDATE SET last_id = MAX(cursors.last_id, excluded.last_id)",
+        "INSERT INTO cursors (agent, read_id) VALUES (?, ?) "
+        "ON CONFLICT(agent) DO UPDATE SET read_id = MAX(cursors.read_id, excluded.read_id)",
         (agent, max_id)
     )
     con.commit()
@@ -207,8 +207,8 @@ def cmd_log(limit):
 
 def cmd_agents():
     con = get_db()
-    rows = con.execute("SELECT agent, last_id FROM cursors ORDER BY agent").fetchall()
-    print(json.dumps([{"agent": r["agent"], "last_id": r["last_id"]} for r in rows], ensure_ascii=False))
+    rows = con.execute("SELECT agent, read_id FROM cursors ORDER BY agent").fetchall()
+    print(json.dumps([{"agent": r["agent"], "read_id": r["read_id"]} for r in rows], ensure_ascii=False))
 
 
 if __name__ == "__main__":

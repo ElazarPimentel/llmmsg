@@ -4,14 +4,13 @@
   "description": "Codex App Server bridge for llmmsg sqlite-backed messaging",
   "main": "bridge.mjs",
   "scripts": {
-    "app-server": "./start-app-server.sh",
     "watch": "node bridge.mjs watch",
     "list": "node bridge.mjs list"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
     "better-sqlite3": "^12.8.0",
     "ws": "^8.20.0"
