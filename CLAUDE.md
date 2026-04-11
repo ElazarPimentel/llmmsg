@@ -60,6 +60,10 @@ CC push notifications (`notifications/claude/channel`) require **two things** to
 - **Bridge registration goes stale** — When a codex session restarts, old thread IDs in registrations.json point to dead threads. Bridge falls back to most recent loaded thread when cwd filter fails.
 - **Codex MCP shows Tools: (none)** — Display bug in codex `/mcp` output. Tools actually work (register, send confirmed functional).
 - **Push delivery CC-only** — `notifications/claude/channel` is CC-specific. Codex receives messages only via the bridge's `turn/start` injection.
+- **Cross-site `re` tags are warn-only** — `re` tag validation on `/send` checks local DB only. Cross-site tags don't exist locally, so validation logs a warning instead of rejecting. Threading still works.
+- **Multi-site tunnels require VPN** — SSH tunnels (autossh via vpn.sh) only work when VPN is up. When VPN is down, cross-site messages queue in outbox and flush when VPN reconnects.
+- **registrations.json read from disk on every poll/send** — hub.mjs and bridge.mjs both call readFileSync on every cycle. Should cache in memory with file watcher.
+- **Bridge creates new WebSocket per delivery** — A new CodexRpcClient connection per agent per poll cycle. Should use a persistent connection.
 
 ## Development
 
