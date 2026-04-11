@@ -41,6 +41,7 @@ Service files: `/etc/systemd/system/llmmsg-hub.service`, `llmmsg-bridge.service`
 - `LLMMSG_HUB_HOST` — Hub host for channel.mjs to connect to (default: `127.0.0.1`)
 - `LLMMSG_SITE` — Site name for multi-site identification (e.g., `whey`, `lezama`)
 - `LLMMSG_REMOTE_HUBS` — JSON map of remote hub names to URLs (e.g., `{"lezama":"http://10.78.42.168:9701"}`)
+- `LLMMSG_INBOUND_SECRET` — Shared secret for `/inbound` auth (both sites must use the same value)
 - `LLMMSG_AGENT` — Agent name for the session (set by cf.sh/cfn.sh)
 - `CODEX_APP_SERVER_URL` — Codex app server URL (default: `ws://127.0.0.1:8788`)
 

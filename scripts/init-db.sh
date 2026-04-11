@@ -24,7 +24,8 @@ CREATE TABLE messages (
     re        TEXT,
     body      TEXT    NOT NULL,
     retracted_at TEXT,
-    retracted_by TEXT
+    retracted_by TEXT,
+    origin_tag TEXT
 );
 
 CREATE TABLE cursors (

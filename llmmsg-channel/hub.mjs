@@ -13,6 +13,7 @@ const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
 const SITE_NAME = process.env.LLMMSG_SITE || '';
 const REMOTE_HUBS_JSON = process.env.LLMMSG_REMOTE_HUBS || ''; // JSON: {"lezama":"http://10.78.42.168:9701"}
+const INBOUND_SECRET = process.env.LLMMSG_INBOUND_SECRET || ''; // shared secret for /inbound auth
 const BRIDGE_REGISTRY_PATH = new URL('../codex-llmmsg-app/registrations.json', import.meta.url);
 
 if (!existsSync(DB_PATH)) {
@@ -26,7 +27,7 @@ db.pragma('busy_timeout = 5000');
 
 // Verify required tables exist (schema is managed by init-db.sh)
 {
-  const required = ['messages', 'cursors', 'roster', 'aros', 'config'];
+  const required = ['messages', 'cursors', 'roster', 'aros', 'config', 'outbox'];
   const existing = new Set(db.prepare(`SELECT name FROM sqlite_master WHERE type='table'`).all().map(r => r.name));
   const missing = required.filter(t => !existing.has(t));
   if (missing.length) {
@@ -35,11 +36,13 @@ db.pragma('busy_timeout = 5000');
   }
 }
 
-// Migrate: ensure last_seen_at exists on roster
-try {
-  db.exec(`ALTER TABLE roster ADD COLUMN last_seen_at INTEGER NOT NULL DEFAULT 0`);
-} catch (error) {
-  if (!String(error.message).includes('duplicate column name')) throw error;
+// Migrations: add columns if missing
+for (const migration of [
+  `ALTER TABLE roster ADD COLUMN last_seen_at INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE messages ADD COLUMN origin_tag TEXT`,
+]) {
+  try { db.exec(migration); }
+  catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
 }
 
 // Migrate legacy cursors: collapse last_id/delivered_id/read_id into read_id only.
@@ -179,15 +182,7 @@ const stmtSetConfig = db.prepare(
 const remoteHubs = REMOTE_HUBS_JSON ? safeParse(REMOTE_HUBS_JSON) : {};
 const remoteHubEntries = Object.entries(typeof remoteHubs === 'object' && remoteHubs ? remoteHubs : {});
 
-// Outbox: queue messages for remote hubs when they're unreachable
-db.exec(`
-  CREATE TABLE IF NOT EXISTS outbox (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
-    target_hub TEXT NOT NULL,
-    payload    TEXT NOT NULL
-  )
-`);
+// Outbox: queue messages for remote hubs when they're unreachable (table created by init-db.sh)
 const stmtOutboxInsert = db.prepare(`INSERT INTO outbox (target_hub, payload) VALUES (?, ?)`);
 const stmtOutboxPending = db.prepare(`SELECT id, target_hub, payload FROM outbox WHERE target_hub = ? ORDER BY id LIMIT 50`);
 const stmtOutboxDelete = db.prepare(`DELETE FROM outbox WHERE id = ?`);
@@ -197,9 +192,11 @@ function httpPostRemote(hubUrl, path, body) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body);
     const url = new URL(path, hubUrl);
+    const headers = { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) };
+    if (INBOUND_SECRET) headers['Authorization'] = `Bearer ${INBOUND_SECRET}`;
     const req = http.request(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+      headers,
       timeout: 5000,
     }, res => {
       let out = '';
@@ -747,12 +744,31 @@ const server = http.createServer(async (req, res) => {
 
     // Inbound: receive a forwarded message from a remote hub
     if (req.method === 'POST' && path === '/inbound') {
+      // Auth: require shared secret when configured
+      if (INBOUND_SECRET) {
+        const auth = req.headers['authorization'] || '';
+        if (auth !== `Bearer ${INBOUND_SECRET}`) {
+          res.writeHead(401);
+          res.end(JSON.stringify({ error: 'unauthorized' }));
+          return;
+        }
+      }
+
       const body = await parseBody(req);
       const { from, to, re, message, origin_site, origin_tag } = body;
       if (!from || !to || !message) {
         res.writeHead(400);
         res.end(JSON.stringify({ error: 'missing from, to, or message' }));
         return;
+      }
+
+      // Dedup: skip if we already received this forwarded message
+      if (origin_tag) {
+        const existing = db.prepare(`SELECT 1 FROM messages WHERE origin_tag = ?`).get(origin_tag);
+        if (existing) {
+          res.end(JSON.stringify({ ok: true, duplicate: true, origin_tag }));
+          return;
+        }
       }
 
       // Check if recipient is local
@@ -763,10 +779,12 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      // Validate re tag if provided — but it may reference a tag on the origin site,
-      // so skip validation for forwarded messages
       const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
       const result = sendMessage(from, to, re || null, msgBody);
+      // Store origin_tag for dedup
+      if (origin_tag) {
+        db.prepare(`UPDATE messages SET origin_tag = ? WHERE id = ?`).run(origin_tag, result.id);
+      }
       console.log(`[inbound] ${from} → ${to} from site ${origin_site || 'unknown'} (origin tag: ${origin_tag || 'none'}) → local id ${result.id}`);
       res.end(JSON.stringify({ ok: true, id: result.id, tag: result.tag }));
       return;
