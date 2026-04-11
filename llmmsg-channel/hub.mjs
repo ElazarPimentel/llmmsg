@@ -22,6 +22,10 @@ if (!existsSync(DB_PATH)) {
   process.exit(1);
 }
 
+if (BIND_ADDR !== '127.0.0.1' && !INBOUND_SECRET) {
+  console.error(`WARNING: binding to ${BIND_ADDR} without LLMMSG_INBOUND_SECRET — /inbound endpoint is unauthenticated`);
+}
+
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 db.pragma('busy_timeout = 5000');
@@ -41,6 +45,7 @@ db.pragma('busy_timeout = 5000');
 for (const migration of [
   `ALTER TABLE roster ADD COLUMN last_seen_at INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE messages ADD COLUMN origin_tag TEXT`,
+  `CREATE INDEX IF NOT EXISTS idx_origin_tag ON messages(origin_tag) WHERE origin_tag IS NOT NULL`,
 ]) {
   try { db.exec(migration); }
   catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
@@ -184,6 +189,8 @@ const remoteHubs = REMOTE_HUBS_JSON ? safeParse(REMOTE_HUBS_JSON) : {};
 const remoteHubEntries = Object.entries(typeof remoteHubs === 'object' && remoteHubs ? remoteHubs : {});
 
 // Outbox: queue messages for remote hubs when they're unreachable (table created by init-db.sh)
+const stmtCheckOriginTag = db.prepare(`SELECT 1 FROM messages WHERE origin_tag = ?`);
+const stmtSetOriginTag = db.prepare(`UPDATE messages SET origin_tag = ? WHERE id = ?`);
 const stmtOutboxInsert = db.prepare(`INSERT INTO outbox (target_hub, payload) VALUES (?, ?)`);
 const stmtOutboxPending = db.prepare(`SELECT id, target_hub, payload FROM outbox WHERE target_hub = ? ORDER BY id LIMIT 50`);
 const stmtOutboxDelete = db.prepare(`DELETE FROM outbox WHERE id = ?`);
@@ -772,7 +779,7 @@ const server = http.createServer(async (req, res) => {
 
       // Dedup: skip if we already received this forwarded message
       if (origin_tag) {
-        const existing = db.prepare(`SELECT 1 FROM messages WHERE origin_tag = ?`).get(origin_tag);
+        const existing = stmtCheckOriginTag.get(origin_tag);
         if (existing) {
           res.end(JSON.stringify({ ok: true, duplicate: true, origin_tag }));
           return;
@@ -791,7 +798,7 @@ const server = http.createServer(async (req, res) => {
       const result = sendMessage(from, to, re || null, msgBody);
       // Store origin_tag for dedup
       if (origin_tag) {
-        db.prepare(`UPDATE messages SET origin_tag = ? WHERE id = ?`).run(origin_tag, result.id);
+        stmtSetOriginTag.run(origin_tag, result.id);
       }
       console.log(`[inbound] ${from} → ${to} from site ${origin_site || 'unknown'} (origin tag: ${origin_tag || 'none'}) → local id ${result.id}`);
       res.end(JSON.stringify({ ok: true, id: result.id, tag: result.tag }));
