@@ -507,6 +507,11 @@ const server = http.createServer(async (req, res) => {
         if (existed) {
           stmtUnregister.run(agent);
           stmtDeleteAroByAgent.run(agent);
+          const sseConn = channels.get(agent);
+          if (sseConn) {
+            sseConn.end();
+            channels.delete(agent);
+          }
           removed.push(agent);
           console.log(`[unregister] ${agent}`);
         }
