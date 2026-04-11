@@ -37,6 +37,10 @@ Service files: `/etc/systemd/system/llmmsg-hub.service`, `llmmsg-bridge.service`
 
 - `LLMMSG_DB` — Path to SQLite DB (default: `/opt/llmmsg/db/llmmsg.sqlite`)
 - `LLMMSG_HUB_PORT` — Hub port (default: 9701)
+- `LLMMSG_HUB_BIND` — Hub bind address (default: `127.0.0.1`, set to `0.0.0.0` for multi-site)
+- `LLMMSG_HUB_HOST` — Hub host for channel.mjs to connect to (default: `127.0.0.1`)
+- `LLMMSG_SITE` — Site name for multi-site identification (e.g., `whey`, `lezama`)
+- `LLMMSG_REMOTE_HUBS` — JSON map of remote hub names to URLs (e.g., `{"lezama":"http://10.78.42.168:9701"}`)
 - `LLMMSG_AGENT` — Agent name for the session (set by cf.sh/cfn.sh)
 - `CODEX_APP_SERVER_URL` — Codex app server URL (default: `ws://127.0.0.1:8788`)
 

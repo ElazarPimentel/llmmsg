@@ -7,9 +7,12 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '2.5';
+const VERSION = '2.6';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
+const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
+const SITE_NAME = process.env.LLMMSG_SITE || '';
+const REMOTE_HUBS_JSON = process.env.LLMMSG_REMOTE_HUBS || ''; // JSON: {"lezama":"http://10.78.42.168:9701"}
 const BRIDGE_REGISTRY_PATH = new URL('../codex-llmmsg-app/registrations.json', import.meta.url);
 
 if (!existsSync(DB_PATH)) {
@@ -171,6 +174,81 @@ const stmtSetConfig = db.prepare(
   `INSERT INTO config (key, value, version, updated_at) VALUES (?, ?, ?, strftime('%s','now'))
    ON CONFLICT(key) DO UPDATE SET value = excluded.value, version = excluded.version, updated_at = strftime('%s','now')`
 );
+
+// --- Multi-site: remote hub forwarding ---
+const remoteHubs = REMOTE_HUBS_JSON ? safeParse(REMOTE_HUBS_JSON) : {};
+const remoteHubEntries = Object.entries(typeof remoteHubs === 'object' && remoteHubs ? remoteHubs : {});
+
+// Outbox: queue messages for remote hubs when they're unreachable
+db.exec(`
+  CREATE TABLE IF NOT EXISTS outbox (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
+    target_hub TEXT NOT NULL,
+    payload    TEXT NOT NULL
+  )
+`);
+const stmtOutboxInsert = db.prepare(`INSERT INTO outbox (target_hub, payload) VALUES (?, ?)`);
+const stmtOutboxPending = db.prepare(`SELECT id, target_hub, payload FROM outbox WHERE target_hub = ? ORDER BY id LIMIT 50`);
+const stmtOutboxDelete = db.prepare(`DELETE FROM outbox WHERE id = ?`);
+const stmtOutboxCount = db.prepare(`SELECT COUNT(*) AS count FROM outbox`);
+
+function httpPostRemote(hubUrl, path, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const url = new URL(path, hubUrl);
+    const req = http.request(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+      timeout: 5000,
+    }, res => {
+      let out = '';
+      res.on('data', c => out += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(out)); }
+        catch { resolve({ raw: out }); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.end(data);
+  });
+}
+
+async function forwardToRemoteHub(hubName, hubUrl, payload) {
+  try {
+    const result = await httpPostRemote(hubUrl, '/inbound', payload);
+    return { ok: true, hub: hubName, result };
+  } catch {
+    // Remote unreachable — queue in outbox
+    stmtOutboxInsert.run(hubName, JSON.stringify(payload));
+    console.log(`[outbox] queued message for ${hubName} (unreachable)`);
+    return { ok: false, hub: hubName, queued: true };
+  }
+}
+
+async function flushOutbox() {
+  for (const [hubName, hubUrl] of remoteHubEntries) {
+    const pending = stmtOutboxPending.all(hubName);
+    if (!pending.length) continue;
+
+    for (const row of pending) {
+      try {
+        const payload = JSON.parse(row.payload);
+        await httpPostRemote(hubUrl, '/inbound', payload);
+        stmtOutboxDelete.run(row.id);
+      } catch {
+        // Still unreachable — stop trying this hub for this cycle
+        break;
+      }
+    }
+  }
+}
+
+// Flush outbox every 30s
+if (remoteHubEntries.length > 0) {
+  setInterval(flushOutbox, 30000);
+}
 
 // Connected channel sessions: agent name → SSE response
 const channels = new Map();
@@ -469,6 +547,19 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (to !== '*' && !stmtCheckRoster.get(to) && !hasActiveBridgeRegistration(to)) {
+        // Recipient not local — try remote hubs
+        if (remoteHubEntries.length > 0) {
+          const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
+          // Store locally first so it appears in local log/search/thread
+          const result = sendMessage(from, to, re || null, msgBody);
+          const payload = { from, to, re: re || null, message: msgBody, origin_site: SITE_NAME, origin_tag: result.tag };
+          const forwards = await Promise.all(
+            remoteHubEntries.map(([name, url]) => forwardToRemoteHub(name, url, payload))
+          );
+          const delivered = forwards.some(f => f.ok);
+          res.end(JSON.stringify({ ...result, forwarded: true, delivered, remotes: forwards.map(f => ({ hub: f.hub, ok: f.ok, queued: f.queued || false })) }));
+          return;
+        }
         const roster = stmtRoster.all().map(r => r.agent);
         res.writeHead(400);
         res.end(JSON.stringify({ error: `recipient '${to}' not in roster`, roster }));
@@ -654,11 +745,42 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Inbound: receive a forwarded message from a remote hub
+    if (req.method === 'POST' && path === '/inbound') {
+      const body = await parseBody(req);
+      const { from, to, re, message, origin_site, origin_tag } = body;
+      if (!from || !to || !message) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: 'missing from, to, or message' }));
+        return;
+      }
+
+      // Check if recipient is local
+      const isLocal = stmtCheckRoster.get(to) || hasActiveBridgeRegistration(to);
+      if (!isLocal && to !== '*') {
+        res.writeHead(404);
+        res.end(JSON.stringify({ error: `recipient '${to}' not on this site` }));
+        return;
+      }
+
+      // Validate re tag if provided — but it may reference a tag on the origin site,
+      // so skip validation for forwarded messages
+      const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
+      const result = sendMessage(from, to, re || null, msgBody);
+      console.log(`[inbound] ${from} → ${to} from site ${origin_site || 'unknown'} (origin tag: ${origin_tag || 'none'}) → local id ${result.id}`);
+      res.end(JSON.stringify({ ok: true, id: result.id, tag: result.tag }));
+      return;
+    }
+
     if (req.method === 'GET' && path === '/status') {
+      const outboxCount = stmtOutboxCount.get()?.count || 0;
       res.end(JSON.stringify({
         version: VERSION,
+        site: SITE_NAME || null,
         connected: [...channels.keys()],
         roster: stmtRoster.all().map(r => r.agent),
+        remoteHubs: Object.keys(remoteHubs),
+        outbox: outboxCount,
         db: DB_PATH,
       }));
       return;
@@ -673,9 +795,11 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`llmmsg-channel hub v${VERSION} listening on 127.0.0.1:${PORT}`);
+server.listen(PORT, BIND_ADDR, () => {
+  console.log(`llmmsg-channel hub v${VERSION} listening on ${BIND_ADDR}:${PORT}`);
   console.log(`DB: ${DB_PATH}`);
+  if (SITE_NAME) console.log(`Site: ${SITE_NAME}`);
+  if (remoteHubEntries.length) console.log(`Remote hubs: ${remoteHubEntries.map(([n, u]) => `${n}=${u}`).join(', ')}`);
 });
 
 function shutdown() {

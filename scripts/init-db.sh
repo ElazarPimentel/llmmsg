@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="1.5"
+VERSION="1.6"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -71,6 +71,13 @@ CREATE TABLE aros (
     aro   TEXT NOT NULL,
     agent TEXT NOT NULL,
     PRIMARY KEY (aro, agent)
+);
+
+CREATE TABLE outbox (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
+    target_hub TEXT NOT NULL,
+    payload    TEXT NOT NULL
 );
 
 CREATE INDEX idx_recv ON messages(recipient, id);

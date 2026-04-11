@@ -12,7 +12,8 @@ import http from 'node:http';
 
 const VERSION = '2.0';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
-const HUB_URL = `http://127.0.0.1:${HUB_PORT}`;
+const HUB_HOST = process.env.LLMMSG_HUB_HOST || '127.0.0.1';
+const HUB_URL = `http://${HUB_HOST}:${HUB_PORT}`;
 const AGENT_CWD = process.env.LLMMSG_CWD || process.cwd();
 
 // Mutable — updated after register() call

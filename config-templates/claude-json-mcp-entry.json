@@ -4,7 +4,8 @@
       "command": "node",
       "args": ["/opt/llmmsg/llmmsg-channel/channel.mjs"],
       "env": {
-        "LLMMSG_HUB_PORT": "9701"
+        "LLMMSG_HUB_PORT": "9701",
+        "LLMMSG_HUB_HOST": "127.0.0.1"
       }
     }
   }
