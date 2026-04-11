@@ -273,7 +273,11 @@ function pollForDirectWrites() {
       const event = { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body) };
       sendToChannel(agent, event);
     }
-    stmtUpsertCursor.run(agent, maxId);
+    // sendToChannel already handles cursor for non-bridged agents
+    // For bridged Codex agents, bridge advances cursor via /read-ack
+    if (!isCodexAgent(agent) || !hasActiveBridgeRegistration(agent)) {
+      stmtUpsertCursor.run(agent, maxId);
+    }
   }
 }
 
@@ -283,7 +287,10 @@ function sendToChannel(agent, event) {
   const res = channels.get(agent);
   if (res) {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
-    stmtUpsertCursor.run(agent, event.id);
+    // Don't advance cursor for bridged Codex agents — bridge handles it via /read-ack
+    if (!isCodexAgent(agent) || !hasActiveBridgeRegistration(agent)) {
+      stmtUpsertCursor.run(agent, event.id);
+    }
     return true;
   }
   return false;
@@ -293,7 +300,9 @@ function broadcastToChannels(event, excludeSender) {
   for (const [agent, res] of channels) {
     if (agent !== excludeSender) {
       res.write(`data: ${JSON.stringify(event)}\n\n`);
-      stmtUpsertCursor.run(agent, event.id);
+      if (!isCodexAgent(agent) || !hasActiveBridgeRegistration(agent)) {
+        stmtUpsertCursor.run(agent, event.id);
+      }
     }
   }
 }
@@ -361,7 +370,8 @@ function parseBody(req) {
 }
 
 function isCodexAgent(agent) {
-  return agent.endsWith('-ca');
+  const parts = agent.split('-');
+  return parts.includes('ca');
 }
 
 function loadBridgeRegistry() {
@@ -478,13 +488,17 @@ const server = http.createServer(async (req, res) => {
         console.log(`[register] ${agent}`);
       }
 
-      // Deliver any unread messages
+      // Deliver any unread messages via SSE catch-up
+      // Skip cursor advancement for bridged Codex agents — bridge handles it
       const sseRes = channels.get(agent);
+      const isBridged = isCodexAgent(agent) && hasActiveBridgeRegistration(agent);
       if (sseRes) {
         const unread = getUnreadMessages(agent);
         for (const msg of unread) {
           sseRes.write(`data: ${JSON.stringify(msg)}\n\n`);
-          stmtUpsertCursor.run(agent, msg.id);
+          if (!isBridged) {
+            stmtUpsertCursor.run(agent, msg.id);
+          }
         }
       }
 
