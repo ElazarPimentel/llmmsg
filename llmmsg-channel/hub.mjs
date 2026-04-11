@@ -435,6 +435,14 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
+      // Reject if another session already has an active SSE connection for this agent
+      const existingSSE = channels.get(agent);
+      if (existingSSE && (!old_agent || old_agent === agent)) {
+        res.writeHead(409);
+        res.end(JSON.stringify({ error: `agent '${agent}' already has an active session. Kill the other session first or use a different name.` }));
+        return;
+      }
+
       stmtRegister.run(agent, cwd);
 
       // Auto-join aro based on name prefix (first segment before '-')
