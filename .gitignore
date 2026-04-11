@@ -2,4 +2,4 @@ node_modules/
 *.sqlite
 db/
 __pycache__/
-registrations.json
+codex-llmmsg-app/registrations.json
