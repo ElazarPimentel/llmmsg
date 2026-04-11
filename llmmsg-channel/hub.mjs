@@ -446,9 +446,12 @@ const server = http.createServer(async (req, res) => {
       stmtRegister.run(agent, cwd);
 
       // Auto-join aro based on name prefix (first segment before '-')
+      // If LLMMSG_SITE is set, append site suffix for host-scoped AROs
+      // e.g. on site "lezama": pluto-pm-ccs-l → aro "pluto-l"
       const prefix = agent.split('-')[0];
       if (prefix && prefix !== agent) {
-        stmtAroJoin.run(prefix, agent);
+        const aroName = SITE_SUFFIX ? `${prefix}${SITE_SUFFIX}` : prefix;
+        stmtAroJoin.run(aroName, agent);
       }
 
       // Migrate SSE connection from old_agent (may be an unregistered-* alias) to new agent name
