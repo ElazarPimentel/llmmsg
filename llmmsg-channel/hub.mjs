@@ -162,6 +162,9 @@ const stmtLog = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, retracted_at FROM messages ORDER BY id DESC LIMIT ?`
 );
 const stmtCheckRoster = db.prepare(`SELECT 1 FROM roster WHERE agent = ?`);
+const stmtCheckOnline = db.prepare(
+  `SELECT 1 FROM roster WHERE agent = ? AND last_seen_at > strftime('%s','now') - 30`
+);
 const stmtCheckTag = db.prepare(`SELECT 1 FROM messages WHERE tag = ?`);
 // ARO fanout only targets agents seen in the last 30s (bridge heartbeats every 2s) or with an active SSE connection.
 // Agents that went offline without unregistering are excluded after 30s of inactivity.
@@ -387,6 +390,17 @@ function hasActiveBridgeRegistration(agent) {
   return !!(entry && entry.threadId && !entry.suspended);
 }
 
+// True if agent is actually reachable right now:
+// - CC: has live SSE connection
+// - Codex: has active bridge registration AND recent heartbeat (<30s)
+function isAgentOnline(agent) {
+  if (channels.has(agent)) return true;
+  if (isCodexAgent(agent)) {
+    return hasActiveBridgeRegistration(agent) && !!stmtCheckOnline.get(agent);
+  }
+  return false;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const path = url.pathname;
@@ -589,24 +603,45 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      if (to !== '*' && !stmtCheckRoster.get(to) && !hasActiveBridgeRegistration(to)) {
-        // Recipient not local — try remote hubs
-        if (remoteHubEntries.length > 0) {
-          const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
-          // Store locally first so it appears in local log/search/thread
-          const result = sendMessage(from, to, re || null, msgBody);
-          const payload = { from, to, re: re || null, message: msgBody, origin_site: SITE_NAME, origin_tag: result.tag };
-          const forwards = await Promise.all(
-            remoteHubEntries.map(([name, url]) => forwardToRemoteHub(name, url, payload))
-          );
-          const delivered = forwards.some(f => f.ok);
-          res.end(JSON.stringify({ ...result, forwarded: true, delivered, remotes: forwards.map(f => ({ hub: f.hub, ok: f.ok, queued: f.queued || false })) }));
+      if (to !== '*') {
+        const localKnown = stmtCheckRoster.get(to) || hasActiveBridgeRegistration(to);
+
+        if (!localKnown) {
+          // Recipient not local — try remote hubs
+          if (remoteHubEntries.length > 0) {
+            const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
+            const result = sendMessage(from, to, re || null, msgBody);
+            const payload = { from, to, re: re || null, message: msgBody, origin_site: SITE_NAME, origin_tag: result.tag };
+            const forwards = await Promise.all(
+              remoteHubEntries.map(([name, url]) => forwardToRemoteHub(name, url, payload))
+            );
+            const delivered = forwards.some(f => f.ok);
+            res.end(JSON.stringify({ ...result, forwarded: true, delivered, remotes: forwards.map(f => ({ hub: f.hub, ok: f.ok, queued: f.queued || false })) }));
+            return;
+          }
+          const roster = stmtRoster.all().map(r => r.agent);
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: `recipient '${to}' not in roster`, roster }));
           return;
         }
-        const roster = stmtRoster.all().map(r => r.agent);
-        res.writeHead(400);
-        res.end(JSON.stringify({ error: `recipient '${to}' not in roster`, roster }));
-        return;
+
+        // Recipient is local — reject if not actually online
+        if (!isAgentOnline(to)) {
+          const online = stmtRosterFull.all()
+            .filter((r) => {
+              if (channels.has(r.agent)) return true;
+              if (!(r.last_seen_at && r.last_seen_at > Math.floor(Date.now() / 1000) - 30)) return false;
+              return !isCodexAgent(r.agent) || hasActiveBridgeRegistration(r.agent);
+            })
+            .map(r => r.agent);
+          res.writeHead(400);
+          res.end(JSON.stringify({
+            error: `recipient '${to}' is offline`,
+            message: `Agent '${to}' is registered but not currently connected. Pick a different recipient or ask the user who to contact instead.`,
+            online,
+          }));
+          return;
+        }
       }
 
       const msgBody = typeof message === 'string' ? message : JSON.stringify(message);

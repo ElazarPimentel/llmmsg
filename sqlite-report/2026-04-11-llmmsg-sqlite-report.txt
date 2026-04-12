@@ -1,0 +1,77 @@
+daily-comms-audit.sh v1.7
+Report file: /opt/llmmsg/sqlite-report/2026-04-11-llmmsg-sqlite-report.txt
+
+=== Last 24h Communications Audit ===
+Median avg chars/message: 511.0
+Average avg chars/message: 537.0
+
+--- Per-Agent Efficiency ---
+sender              msgs  avg_chars  max_chars  total_chars  est_tokens  replies  initiated  avg_reply_chars  avg_init_chars  over_2k  has_summary_and_details  has_summary_and_message
+------------------  ----  ---------  ---------  -----------  ----------  -------  ---------  ---------------  --------------  -------  -----------------------  -----------------------
+llmmsg-ccs-l        27    226.0      659        6089         1522.0      18       9          199.0            278.0           0        0                        0                      
+llmmsg-ccs          24    224.0      617        5369         1342.0      12       12         177.0            270.0           0        0                        0                      
+mars-db-ca          6     805.0      1248       4830         1208.0      0        6                           805.0           0        0                        0                      
+mars-pm-ca          15    311.0      633        4664         1166.0      0        15                          311.0           0        0                        0                      
+pm-ayudarg-ca       6     535.0      865        3212         803.0       2        4          546.0            530.0           0        0                        0                      
+mars-coder-ca       3     932.0      1175       2796         699.0       3        0          932.0                            0        0                        0                      
+mars-audit-ca       3     885.0      988        2656         664.0       0        3                           885.0           0        0                        0                      
+llmmsg-ca           9     288.0      382        2589         647.0       8        1          281.0            342.0           0        0                        0                      
+llmmsg-ca-l         3     577.0      1063       1731         433.0       3        0          577.0                            0        0                        0                      
+lacc                1     1517.0     1517       1517         379.0       0        1                           1517.0          0        0                        0                      
+coder-ayudarg-ca    4     360.0      460        1440         360.0       3        1          327.0            460.0           0        0                        0                      
+evolutiva-pm-ccs    2     680.0      972        1360         340.0       1        1          972.0            388.0           0        0                        0                      
+pm-evolutiva-ccs-l  2     548.0      780        1095         274.0       2        0          548.0                            0        0                        0                      
+auditor-ayudarg-ca  2     511.0      687        1022         256.0       0        2                           511.0           0        0                        0                      
+pm-ayudarg-ccs      4     228.0      228        912          228.0       0        4                           228.0           0        0                        0                      
+db-ayudarg-ccs      1     470.0      470        470          118.0       1        0          470.0                            0        0                        0                      
+test                1     32.0       32         32           8.0         0        1                           32.0            0        0                        0                      
+
+--- Top Conversation Pairs ---
+pair                             msgs  chars  est_tokens
+-------------------------------  ----  -----  ----------
+llmmsg-ccs-l -> llmmsg-ccs       26    5735   1434.0    
+llmmsg-ccs -> llmmsg-ccs-l       23    5106   1277.0    
+mars-db-ca -> mars-pm-ca         4     3843   961.0     
+mars-coder-ca -> mars-pm-ca      3     2796   699.0     
+mars-audit-ca -> mars-pm-ca      3     2656   664.0     
+pm-ayudarg-ca -> pm-ayudarg-ccs  3     1854   464.0     
+mars-pm-ca -> mars-db-ca         6     1787   447.0     
+llmmsg-ca-l -> llmmsg-ca         3     1731   433.0     
+
+--- Flagged: Messages over 2000 chars ---
+
+--- Flagged: Duplicate summary+details pattern ---
+
+--- Flagged: Agents 2x above median avg chars ---
+sender  msgs  avg_chars  vs_median
+------  ----  ---------  ---------
+lacc    1     1517.0     3.0      
+
+--- Flagged: One-off type values (used only once in 24h) ---
+
+--- Summary ---
+{"period":"24h","total_messages":113,"total_chars":41784,"est_tokens":10446.0,"median_avg_chars":511.0,"agents_above_2x_median":1}
+
+--- Comparison vs Last Audit (2026-04-08 18:53:53, guide v2.0) ---
+agent               msgs_now  msgs_prev  msgs_delta  avg_now  avg_prev  avg_delta  tok_now  tok_prev  tok_delta  big_now  big_prev
+------------------  --------  ---------  ----------  -------  --------  ---------  -------  --------  ---------  -------  --------
+llmmsg-ccs-l        27        0          27          226.0    0         226.0      1522.0   0         1522.0     0        0       
+mars-db-ca          6         0          6           805.0    0         805.0      1208.0   0         1208.0     0        0       
+mars-pm-ca          15        0          15          311.0    0         311.0      1166.0   0         1166.0     0        0       
+pm-ayudarg-ca       6         3          3           535.0    261.0     274.0      803.0    196.0     607.0      0        0       
+llmmsg-ca-l         3         0          3           577.0    0         577.0      433.0    0         433.0      0        0       
+llmmsg-ca           9         2          7           288.0    534.0     -246.0     647.0    267.0     380.0      0        0       
+lacc                1         0          1           1517.0   0         1517.0     379.0    0         379.0      0        0       
+evolutiva-pm-ccs    2         0          2           680.0    0         680.0      340.0    0         340.0      0        0       
+llmmsg-ccs          24        6          18          224.0    703.0     -479.0     1342.0   1055.0    287.0      0        0       
+pm-evolutiva-ccs-l  2         0          2           548.0    0         548.0      274.0    0         274.0      0        0       
+test                1         0          1           32.0     0         32.0       8.0      0         8.0        0        0       
+mars-coder-ca       3         10         -7          932.0    463.0     469.0      699.0    1158.0    -459.0     0        0       
+mars-audit-ca       3         5          -2          885.0    1155.0    -270.0     664.0    1444.0    -780.0     0        0       
+db-ayudarg-ccs      1         42         -41         470.0    551.0     -81.0      118.0    5791.0    -5673.0    0        1       
+coder-ayudarg-ca    4         71         -67         360.0    371.0     -11.0      360.0    6584.0    -6224.0    0        0       
+auditor-ayudarg-ca  2         24         -22         511.0    1963.0    -1452.0    256.0    11779.0   -11523.0   0        10      
+pm-ayudarg-ccs      4         129        -125        228.0    383.0     -155.0     228.0    12356.0   -12128.0   0        0       
+
+
+Audit snapshot saved (guide v2.0)
