@@ -2,6 +2,10 @@
 
 **IMPORTANT: Questions are not instructions. When the user asks a question, answer it. Do not start editing or implementing unless explicitly told to.**
 
+## Ecosystem Map
+
+Before editing anything, read **[ECOSYSTEM.md](./ECOSYSTEM.md)** — it is the canonical map of the llmmsg ecosystem. Covers components, data flow, env vars, state files, invariants, quickstart for new members, and out-of-scope items. Every launcher, hub, bridge, MCP server, and tool in the system is documented there.
+
 ## Project Overview
 
 Inter-agent messaging system for Claude Code and OpenAI Codex sessions. Enables CC and Codex sessions to send/receive messages via a shared SQLite DB and hub server.
