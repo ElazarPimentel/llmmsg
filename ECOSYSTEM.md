@@ -145,7 +145,9 @@ remote hub /inbound ── POST over SSH tunnel ──► remote SQLite
 | `/opt/llmmsg/db/llmmsg.sqlite` | hub | Messages (with origin_tag), cursors (read_id only), roster, aros, config, outbox |
 | `/opt/llmmsg/codex-llmmsg-app/registrations.json` | bridge | Agent → (threadId, cwd, suspended) binding. **Not tracked in git.** |
 | `/opt/llmmsg/codex-llmmsg-app/bridge-state.sqlite` | bridge | `delivery_cursor` tracking last-delivered id per Codex agent. Separate from main DB for bridge write-isolation. |
-| `<cwd>/.agent-name` | launchers | Per-project agent name, auto-created on first launch if missing |
+| `<cwd>/.agent-name-cc` | CC launchers | Per-project CC agent name (ccs.sh, ccsn.sh). Auto-created on first ccs launch. |
+| `<cwd>/.agent-name-ca` | Codex launchers | Per-project Codex agent name (cf.sh, cfn.sh). Auto-created on first cf launch. |
+| `<cwd>/.agent-name` | legacy | Pre-split unified agent name file. Launchers still read it as fallback for backwards compatibility. |
 | `~/.codex/state_5.sqlite` | Codex | Thread history DB (used by cf.sh for bootstrap thread lookup) |
 | `~/.claude.json` | Claude Code | MCP config (`mcpServers.llmmsg-channel` entry) |
 | `~/.codex/config.toml` | Codex | MCP config (`[mcp_servers.llmmsg-channel]` section) |
@@ -219,7 +221,7 @@ When writing a new launcher/wrapper that participates in llmmsg:
 3. For CC wrappers: pass `--dangerously-load-development-channels server:llmmsg-channel` to `claude`.
 4. Add the marker (`# llmmsg-ecosystem`) in the top 10 lines of the file.
 5. Declare `VERSION="x.y"` variable and print `echo "<name> v$VERSION"` on every run.
-6. Handle `.agent-name` file read, and create it from cwd basename if missing.
+6. Handle the LLM-specific agent-name file: CC wrappers read `.agent-name-cc` (with legacy `.agent-name` fallback); Codex wrappers read `.agent-name-ca` (with legacy fallback). Create the appropriate file from cwd basename if missing. Both files may coexist in the same folder for dual-session folders.
 7. `exec` the underlying tool at the end of the script for clean signal propagation.
 8. Check hard dependencies before launch with actionable errors (e.g. service readiness checks).
 9. Invoke `title.sh` for the terminal title (convention, not hard rule).
