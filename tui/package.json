@@ -1,0 +1,16 @@
+{
+  "name": "llmmsg-chat",
+  "version": "0.1.0",
+  "description": "TUI chat client for llmmsg-channel — human agent in the llmmsg ecosystem",
+  "main": "llmmsg-chat.mjs",
+  "type": "module",
+  "bin": {
+    "llmmsg-chat": "./llmmsg-chat.mjs"
+  },
+  "scripts": {
+    "start": "node llmmsg-chat.mjs"
+  },
+  "dependencies": {
+    "blessed": "^0.1.81"
+  }
+}
