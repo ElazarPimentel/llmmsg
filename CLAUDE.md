@@ -6,6 +6,11 @@
 
 Before editing anything, read **[ECOSYSTEM.md](./ECOSYSTEM.md)** — it is the canonical map of the llmmsg ecosystem. Covers components, data flow, env vars, state files, invariants, quickstart for new members, and out-of-scope items. Every launcher, hub, bridge, MCP server, and tool in the system is documented there.
 
+**Critical prerequisites for this host:**
+- `/etc/llmmsg/site.conf` MUST exist. Hub and launchers hard-error if missing. Templates in `config-templates/site.conf.{whey,lezama}`. Install once per host with `sudo install -m 0644 -o root -g root config-templates/site.conf.<hostname> /etc/llmmsg/site.conf`.
+- Launcher source of truth is `~/Documents/terminal/sh/` (separate repo `ElazarPimentel/sh`). `/opt/llmmsg/launchers/` is a real symlink mirror into that repo — never edit via the mirror path.
+- Shared launcher helper at `scripts/lib/resolve-agent-name.sh` is sourced by ccs.sh, ccsn.sh, cf.sh, cfn.sh to load site config and resolve/validate the agent label. Do not duplicate that logic in new launchers.
+
 ## Project Overview
 
 Inter-agent messaging system for Claude Code and OpenAI Codex sessions. Enables CC and Codex sessions to send/receive messages via a shared SQLite DB and hub server.
@@ -43,11 +48,13 @@ Service files: `/etc/systemd/system/llmmsg-hub.service`, `llmmsg-bridge.service`
 - `LLMMSG_HUB_PORT` — Hub port (default: 9701)
 - `LLMMSG_HUB_BIND` — Hub bind address (default: `127.0.0.1`, set to `0.0.0.0` for multi-site)
 - `LLMMSG_HUB_HOST` — Hub host for channel.mjs to connect to (default: `127.0.0.1`)
-- `LLMMSG_SITE` — Site name for multi-site identification (e.g., `whey`, `lezama`)
-- `LLMMSG_REMOTE_HUBS` — JSON map of remote hub names to URLs (e.g., `{"lezama":"http://10.78.42.168:9701"}`)
-- `LLMMSG_INBOUND_SECRET` — Shared secret for `/inbound` auth (both sites must use the same value)
-- `LLMMSG_SITE_SUFFIX` — Required agent name suffix for this site (e.g., `-l`). Hub rejects registrations without it.
-- `LLMMSG_AGENT` — Agent name for the session (set by cf.sh/cfn.sh)
+- `LLMMSG_SITE` — Site identity. **Source: `/etc/llmmsg/site.conf`.** Env var overrides file.
+- `LLMMSG_SITE_SUFFIX` — Required agent name suffix (empty on whey, `-l` on lezama). **Source: `/etc/llmmsg/site.conf`.** Env var overrides file for testing.
+- `LLMMSG_ARO_SEGMENT` — Which name segment is the project (whey=0, lezama=1). **Source: `/etc/llmmsg/site.conf`.**
+- `LLMMSG_SITE_CONF` — Override path for `/etc/llmmsg/site.conf` (testing only).
+- `LLMMSG_REMOTE_HUBS` — JSON map of remote hub names to URLs (env only, secret-adjacent)
+- `LLMMSG_INBOUND_SECRET` — Shared secret for `/inbound` auth (env only, both sites must match)
+- `LLMMSG_AGENT` — Agent name for the session (set by launcher via `.agent-name-{cc,ca}` + site suffix)
 - `CODEX_APP_SERVER_URL` — Codex app server URL (default: `ws://127.0.0.1:8788`)
 
 ## Critical: Push Delivery Requirements

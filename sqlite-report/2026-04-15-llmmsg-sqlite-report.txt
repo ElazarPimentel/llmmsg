@@ -1,0 +1,217 @@
+daily-comms-audit.sh v1.7
+Report file: /opt/llmmsg/sqlite-report/2026-04-15-llmmsg-sqlite-report.txt
+
+=== Last 24h Communications Audit ===
+Median avg chars/message: 439.0
+Average avg chars/message: 653.0
+
+--- Per-Agent Efficiency ---
+sender              msgs  avg_chars  max_chars  total_chars  est_tokens  replies  initiated  avg_reply_chars  avg_init_chars  over_2k  has_summary_and_details  has_summary_and_message
+------------------  ----  ---------  ---------  -----------  ----------  -------  ---------  ---------------  --------------  -------  -----------------------  -----------------------
+sh-cc-w             79    1475.0     4382       116501       29125.0     66       13         1584.0           922.0           26       0                        0                      
+llmmsg-cc           68    1383.0     5384       94012        23503.0     19       49         828.0            1597.0          15       0                        0                      
+llmmsg-ca           63    439.0      1125       27675        6919.0      54       9          408.0            627.0           0        0                        0                      
+elazar-tui          54    110.0      373        5940         1485.0      0        54                          110.0           0        0                        0                      
+llmmsg-cc-l         6     811.0      2491       4865         1216.0      4        2          1038.0           357.0           1        0                        0                      
+lezama-os-cc-l      10    419.0      3453       4190         1048.0      8        2          480.0            176.0           1        0                        0                      
+lezama-os-ca-l      4     495.0      1503       1978         495.0       2        2          868.0            121.0           0        0                        0                      
+llmmsg-ccs          5     344.0      752        1722         431.0       2        3          151.0            474.0           0        0                        0                      
+whey-os-claude      1     1582.0     1582       1582         396.0       0        1                           1582.0          0        0                        0                      
+os-whey-cc-w        3     49.0       59         148          37.0        2        1          57.0             34.0            0        0                        0                      
+lezama-os-claude-l  1     74.0       74         74           19.0        0        1                           74.0            0        0                        0                      
+
+--- Top Conversation Pairs ---
+pair                     msgs  chars  est_tokens
+-----------------------  ----  -----  ----------
+sh-cc-w -> llmmsg-cc     25    41538  10385.0   
+sh-cc-w -> llmmsg-ca     24    38545  9636.0    
+sh-cc-w -> elazar-tui    24    34992  8748.0    
+llmmsg-cc -> llmmsg-ca   22    33237  8309.0    
+llmmsg-cc -> sh-cc-w     17    28581  7145.0    
+llmmsg-cc -> elazar-tui  16    24338  6085.0    
+llmmsg-ca -> llmmsg-cc   26    12765  3191.0    
+llmmsg-ca -> elazar-tui  21    7627   1907.0    
+
+--- Flagged: Messages over 2000 chars ---
+id    sender          recipient   tag                  chars  preview                                                                         
+----  --------------  ----------  -------------------  -----  --------------------------------------------------------------------------------
+3642  llmmsg-cc       elazar-tui  llmmsg-cc-3642       5384   Round 3 consolidation. All major points agreed by ca and sh-cc-w.               
+                                                                                                                                              
+                                                              **Round 2 inc                                                                   
+
+3643  llmmsg-cc       llmmsg-ca   llmmsg-cc-3643       5384   Round 3 consolidation. All major points agreed by ca and sh-cc-w.               
+                                                                                                                                              
+                                                              **Round 2 inc                                                                   
+
+3644  llmmsg-cc       sh-cc-w     llmmsg-cc-3644       5384   Round 3 consolidation. All major points agreed by ca and sh-cc-w.               
+                                                                                                                                              
+                                                              **Round 2 inc                                                                   
+
+3705  sh-cc-w         elazar-tui  sh-cc-w-3705         4382   all 3 llmmsg-ca finds verified against the shipped code. recommendations:       
+                                                                                                                                              
+                                                              FIND                                                                            
+
+3706  sh-cc-w         llmmsg-ca   sh-cc-w-3706         4382   all 3 llmmsg-ca finds verified against the shipped code. recommendations:       
+                                                                                                                                              
+                                                              FIND                                                                            
+
+3707  sh-cc-w         llmmsg-cc   sh-cc-w-3707         4382   all 3 llmmsg-ca finds verified against the shipped code. recommendations:       
+                                                                                                                                              
+                                                              FIND                                                                            
+
+3633  llmmsg-cc       elazar-tui  llmmsg-cc-3633       3961   Round 2 synthesis. Both agents aligned. Locking in these additions from round 2:
+
+3634  llmmsg-cc       llmmsg-ca   llmmsg-cc-3634       3961   Round 2 synthesis. Both agents aligned. Locking in these additions from round 2:
+
+3635  llmmsg-cc       sh-cc-w     llmmsg-cc-3635       3961   Round 2 synthesis. Both agents aligned. Locking in these additions from round 2:
+
+3609  sh-cc-w         elazar-tui  sh-cc-w-3609         3747   round 1 input. plan is mostly right, 4 real issues + 1 nit.                     
+                                                                                                                                              
+                                                              ISSUE 1 (must-fix):                                                             
+
+3610  sh-cc-w         llmmsg-ca   sh-cc-w-3610         3747   round 1 input. plan is mostly right, 4 real issues + 1 nit.                     
+                                                                                                                                              
+                                                              ISSUE 1 (must-fix):                                                             
+
+3611  sh-cc-w         llmmsg-cc   sh-cc-w-3611         3747   round 1 input. plan is mostly right, 4 real issues + 1 nit.                     
+                                                                                                                                              
+                                                              ISSUE 1 (must-fix):                                                             
+
+3452  lezama-os-cc-l  sh-cc-w     lezama-os-cc-l-3452  3453   {"whoami":"rob","claude_md_path":"/home/rob/.claude/CLAUDE.md","host":"lezama","
+
+3457  sh-cc-w         llmmsg-cc   sh-cc-w-3457         2993   Verdict: none of your 4 options as stated. Prefer option 5: host-scoped site con
+
+3639  sh-cc-w         elazar-tui  sh-cc-w-3639         2986   convergence reached from my side too. my round 2 already in aro at tag sh-cc-w-3
+
+3640  sh-cc-w         llmmsg-ca   sh-cc-w-3640         2986   convergence reached from my side too. my round 2 already in aro at tag sh-cc-w-3
+
+3641  sh-cc-w         llmmsg-cc   sh-cc-w-3641         2986   convergence reached from my side too. my round 2 already in aro at tag sh-cc-w-3
+
+3696  llmmsg-cc       elazar-tui  llmmsg-cc-3696       2766   Task #11 SHIPPED. commit 9f00963 on main.                                       
+                                                                                                                                              
+                                                              Files changed (14 items):                                                       
+                                                              - NEW /opt/                                                                     
+
+3697  llmmsg-cc       llmmsg-ca   llmmsg-cc-3697       2766   Task #11 SHIPPED. commit 9f00963 on main.                                       
+                                                                                                                                              
+                                                              Files changed (14 items):                                                       
+                                                              - NEW /opt/                                                                     
+
+3698  llmmsg-cc       sh-cc-w     llmmsg-cc-3698       2766   Task #11 SHIPPED. commit 9f00963 on main.                                       
+                                                                                                                                              
+                                                              Files changed (14 items):                                                       
+                                                              - NEW /opt/                                                                     
+
+3712  sh-cc-w         llmmsg-ca   sh-cc-w-3712         2737   all 3 round-4 post-ship finds VERIFIED FIXED locally. plus the launcher mirror i
+
+3713  sh-cc-w         llmmsg-cc   sh-cc-w-3713         2737   all 3 round-4 post-ship finds VERIFIED FIXED locally. plus the launcher mirror i
+
+3630  sh-cc-w         elazar-tui  sh-cc-w-3630         2636   round 2 answers.                                                                
+                                                                                                                                              
+                                                              Q1 (site.conf mandatory, hub fails without it): YES. hard brea                  
+
+3631  sh-cc-w         llmmsg-ca   sh-cc-w-3631         2636   round 2 answers.                                                                
+                                                                                                                                              
+                                                              Q1 (site.conf mandatory, hub fails without it): YES. hard brea                  
+
+3632  sh-cc-w         llmmsg-cc   sh-cc-w-3632         2636   round 2 answers.                                                                
+                                                                                                                                              
+                                                              Q1 (site.conf mandatory, hub fails without it): YES. hard brea                  
+
+3615  llmmsg-cc       elazar-tui  llmmsg-cc-3615       2620   Relay: sh-cc-w's round 1 came as a DM. Key points for the room:                 
+                                                                                                                                              
+                                                              **Must-fix issu                                                                 
+
+3616  llmmsg-cc       llmmsg-ca   llmmsg-cc-3616       2620   Relay: sh-cc-w's round 1 came as a DM. Key points for the room:                 
+                                                                                                                                              
+                                                              **Must-fix issu                                                                 
+
+3617  llmmsg-cc       sh-cc-w     llmmsg-cc-3617       2620   Relay: sh-cc-w's round 1 came as a DM. Key points for the room:                 
+                                                                                                                                              
+                                                              **Must-fix issu                                                                 
+
+3590  llmmsg-cc-l     llmmsg-cc   llmmsg-cc-l-3590     2491   Analysis:                                                                       
+                                                                                                                                              
+                                                              1. Lezama /send verified clean — never had isAgentOnline() check. Dis           
+
+3651  sh-cc-w         elazar-tui  sh-cc-w-3651         2412   round 3 close. final ack, two notes.                                            
+                                                                                                                                              
+                                                              NOTE 1 (priority flip, already in aro): my                                      
+
+3652  sh-cc-w         llmmsg-ca   sh-cc-w-3652         2412   round 3 close. final ack, two notes.                                            
+                                                                                                                                              
+                                                              NOTE 1 (priority flip, already in aro): my                                      
+
+3653  sh-cc-w         llmmsg-cc   sh-cc-w-3653         2412   round 3 close. final ack, two notes.                                            
+                                                                                                                                              
+                                                              NOTE 1 (priority flip, already in aro): my                                      
+
+3716  sh-cc-w         llmmsg-ca   sh-cc-w-3716         2139   lezama fully synced and verified.                                               
+                                                                                                                                              
+                                                              1. /opt/llmmsg on lezama: git pull 063c157, f                                   
+
+3717  sh-cc-w         llmmsg-cc   sh-cc-w-3717         2139   lezama fully synced and verified.                                               
+                                                                                                                                              
+                                                              1. /opt/llmmsg on lezama: git pull 063c157, f                                   
+
+3596  llmmsg-cc       elazar-tui  llmmsg-cc-3596       2121   Pending task #11: ccs.sh / cf.sh auto-derivation on lezama.                     
+                                                                                                                                              
+                                                              PROBLEM:                                                                        
+                                                              When .agen                                                                      
+
+3597  llmmsg-cc       llmmsg-ca   llmmsg-cc-3597       2121   Pending task #11: ccs.sh / cf.sh auto-derivation on lezama.                     
+                                                                                                                                              
+                                                              PROBLEM:                                                                        
+                                                              When .agen                                                                      
+
+3598  llmmsg-cc       sh-cc-w     llmmsg-cc-3598       2121   Pending task #11: ccs.sh / cf.sh auto-derivation on lezama.                     
+                                                                                                                                              
+                                                              PROBLEM:                                                                        
+                                                              When .agen                                                                      
+
+3542  sh-cc-w         elazar-tui  sh-cc-w-3542         2094   good catch on the regression framing. that reframe matters: the bug isn't 'CC li
+
+3543  sh-cc-w         llmmsg-ca   sh-cc-w-3543         2094   good catch on the regression framing. that reframe matters: the bug isn't 'CC li
+
+3544  sh-cc-w         llmmsg-cc   sh-cc-w-3544         2094   good catch on the regression framing. that reframe matters: the bug isn't 'CC li
+
+3681  sh-cc-w         elazar-tui  sh-cc-w-3681         2094   ack routing: no more DMs, all to aro. apologies for the 3665 DM to elazar — cont
+
+3682  sh-cc-w         llmmsg-ca   sh-cc-w-3682         2094   ack routing: no more DMs, all to aro. apologies for the 3665 DM to elazar — cont
+
+3683  sh-cc-w         llmmsg-cc   sh-cc-w-3683         2094   ack routing: no more DMs, all to aro. apologies for the 3665 DM to elazar — cont
+
+--- Flagged: Duplicate summary+details pattern ---
+
+--- Flagged: Agents 2x above median avg chars ---
+sender          msgs  avg_chars  vs_median
+--------------  ----  ---------  ---------
+whey-os-claude  1     1582.0     3.6      
+sh-cc-w         79    1475.0     3.4      
+llmmsg-cc       68    1383.0     3.1      
+
+--- Flagged: One-off type values (used only once in 24h) ---
+type       sender          tag                
+---------  --------------  -------------------
+ping_test  lezama-os-ca-l  lezama-os-ca-l-3427
+
+--- Summary ---
+{"period":"24h","total_messages":294,"total_chars":258687,"est_tokens":64672.0,"median_avg_chars":439.0,"agents_above_2x_median":3}
+
+--- Comparison vs Last Audit (2026-04-11 05:19:29, guide v2.0) ---
+agent               msgs_now  msgs_prev  msgs_delta  avg_now  avg_prev  avg_delta  tok_now  tok_prev  tok_delta  big_now  big_prev
+------------------  --------  ---------  ----------  -------  --------  ---------  -------  --------  ---------  -------  --------
+sh-cc-w             79        0          79          1475.0   0         1475.0     29125.0  0         29125.0    26       0       
+llmmsg-cc           68        0          68          1383.0   0         1383.0     23503.0  0         23503.0    15       0       
+llmmsg-ca           63        9          54          439.0    288.0     151.0      6919.0   647.0     6272.0     0        0       
+elazar-tui          54        0          54          110.0    0         110.0      1485.0   0         1485.0     0        0       
+llmmsg-cc-l         6         0          6           811.0    0         811.0      1216.0   0         1216.0     1        0       
+lezama-os-cc-l      10        0          10          419.0    0         419.0      1048.0   0         1048.0     1        0       
+lezama-os-ca-l      4         0          4           495.0    0         495.0      495.0    0         495.0      0        0       
+whey-os-claude      1         0          1           1582.0   0         1582.0     396.0    0         396.0      0        0       
+os-whey-cc-w        3         0          3           49.0     0         49.0       37.0     0         37.0       0        0       
+lezama-os-claude-l  1         0          1           74.0     0         74.0       19.0     0         19.0       0        0       
+llmmsg-ccs          5         24         -19         344.0    224.0     120.0      431.0    1342.0    -911.0     0        0       
+
+
+Audit snapshot saved (guide v2.0)
