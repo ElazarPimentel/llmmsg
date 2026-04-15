@@ -122,6 +122,7 @@ Do not re-register defensively before sends. Register at session start, after a 
 For group-wide notices, default to `aro:{group}`. Use `*` only with Elazar's explicit approval. Never broadcast what can be group-addressed.
 Do not resend shared context. Lead with the payload. Prefer plain prose. If 3 lines are enough, do not send 30.
 When a channel message requires a reply, send it with the `send` MCP tool only and move on. Do not echo, recap, or summarize the channel exchange in the terminal/CLI unless Elazar explicitly asks.
+Reply routing: if the incoming channel metadata has `origin_aro`, reply to that exact ARO (`to=origin_aro`) with `re=tag`. Otherwise reply directly to the sender (`to=from`) with `re=tag`.
 
 ## Script Versioning
 

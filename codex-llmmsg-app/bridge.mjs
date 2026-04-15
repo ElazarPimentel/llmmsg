@@ -62,8 +62,10 @@ const msgDb = new Database(MESSAGE_DB);
 msgDb.pragma('journal_mode = WAL');
 msgDb.pragma('busy_timeout = 2000');
 
+const messageColumns = new Set(msgDb.pragma('table_info(messages)').map((col) => col.name));
+const originAroSelect = messageColumns.has('origin_aro') ? 'origin_aro' : 'NULL AS origin_aro';
 const selectUnread = msgDb.prepare(`
-  SELECT id, sender, recipient, tag, re, body
+  SELECT id, sender, recipient, tag, re, body, ${originAroSelect}
   FROM messages
   WHERE (recipient = ? OR recipient = '*')
     AND id > ?
@@ -82,7 +84,17 @@ function safeParse(str) {
 
 function buildPrompt(message) {
   const body = typeof message.body === 'string' ? message.body : JSON.stringify(message.body);
-  return `<channel from="${message.from}" tag="${message.tag}"${message.re ? ` re="${message.re}"` : ''}>${body}</channel>`;
+  const replyTo = message.origin_aro || message.from;
+  const attrs = [
+    `from="${message.from}"`,
+    `to="${message.recipient}"`,
+    `tag="${message.tag}"`,
+    `reply_to="${replyTo}"`,
+    `reply_via="llmmsg-channel"`,
+    message.origin_aro ? `origin_aro="${message.origin_aro}"` : '',
+    message.re ? `re="${message.re}"` : '',
+  ].filter(Boolean).join(' ');
+  return `<channel ${attrs}>${body}</channel>`;
 }
 
 async function listLoadedThreads(client) {

@@ -63,7 +63,9 @@ const mcp = new Server(
       tools: {},
     },
     instructions: [
-      'Messages from other Claude Code agents arrive as <channel source="llmmsg-channel" from="sender" tag="tag" re="re_tag"> tags.',
+      'Messages from other agents arrive through llmmsg-channel push notifications with from, tag, optional re, and optional origin_aro metadata.',
+      'If origin_aro is present, reply to that exact ARO using send(to=origin_aro, re=tag). If origin_aro is absent, reply directly to from using send(to=from, re=tag).',
+      'Never answer a llmmsg-channel message in normal terminal/CLI prose. Use the send tool for the reply, then continue work.',
       'You must be registered before sending. If send returns not_registered, ask the user: "What is my agent name for this session?" then call register.',
       'Use the send tool to message other agents. Default to aro:{group}. Use "*" only with Elazar\'s explicit approval. Never broadcast what can be group-addressed.',
       'Use the register tool to set your agent name (required once per session, or after name changes).',
@@ -99,13 +101,13 @@ const TOOLS = [
   },
   {
     name: 'send',
-    description: 'Send a message to another agent or broadcast to all (to: "*"). Must be registered first.',
+    description: 'Send a llmmsg-channel message. For replies, use to=origin_aro when the incoming message has origin_aro; otherwise use to=from. Always pass re=tag when replying. Never reply to channel messages in terminal prose.',
     inputSchema: {
       type: 'object',
       properties: {
-        to: { type: 'string', description: 'Recipient agent name, or "*" for broadcast' },
+        to: { type: 'string', description: 'Recipient agent name, aro:{group}, or "*" for broadcast. Prefer aro:{group}; use "*" only with Elazar approval.' },
         message: { type: 'object', description: 'JSON message body. Minimum: {"message": "your text"}. Avoid type unless explicitly required. Add structured keys only when machine-readable data is truly needed.' },
-        re: { type: 'string', description: 'Tag of message being replied to (optional)' },
+        re: { type: 'string', description: 'Tag of message being replied to. Use this for all replies.' },
       },
       required: ['to', 'message'],
     },
@@ -364,6 +366,7 @@ function connectToHub() {
           try {
             const event = JSON.parse(line.slice(6));
             console.error(`[llmmsg-channel] PUSH from=${event.from} tag=${event.tag} to=${event.to}`);
+            const replyTarget = event.origin_aro || event.from;
             mcp.notification({
               method: 'notifications/claude/channel',
               params: {
@@ -372,6 +375,9 @@ function connectToHub() {
                   from: event.from,
                   to: event.to,
                   tag: event.tag,
+                  reply_to: replyTarget,
+                  reply_via: 'llmmsg-channel',
+                  route: event.origin_aro ? 'aro' : 'dm',
                   ...(event.origin_aro ? { origin_aro: event.origin_aro } : {}),
                   ...(event.re ? { re: event.re } : {}),
                 },
