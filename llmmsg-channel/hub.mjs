@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '2.6';
+const VERSION = '2.7';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
@@ -472,6 +472,14 @@ const server = http.createServer(async (req, res) => {
       }
 
       stmtRegister.run(agent, cwd);
+
+      // First-time registration: initialize cursor at MAX(id) so the agent
+      // starts "caught up" without receiving the full broadcast backlog.
+      // Existing agents keep their cursor (upsert only inserts if missing).
+      if (!stmtGetCursor.get(agent)) {
+        const maxRow = db.prepare(`SELECT COALESCE(MAX(id), 0) AS max_id FROM messages`).get();
+        stmtUpsertCursor.run(agent, maxRow.max_id);
+      }
 
       // Auto-join aro: extract project name from agent name segments
       // Whey (segment 0): pluto-pm-ccs → aro "pluto"
