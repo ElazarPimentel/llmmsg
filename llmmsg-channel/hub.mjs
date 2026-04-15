@@ -633,23 +633,8 @@ const server = http.createServer(async (req, res) => {
           return;
         }
 
-        // Recipient is local — reject if not actually online
-        if (!isAgentOnline(to)) {
-          const online = stmtRosterFull.all()
-            .filter((r) => {
-              if (channels.has(r.agent)) return true;
-              if (!(r.last_seen_at && r.last_seen_at > Math.floor(Date.now() / 1000) - 30)) return false;
-              return !isCodexAgent(r.agent) || hasActiveBridgeRegistration(r.agent);
-            })
-            .map(r => r.agent);
-          res.writeHead(400);
-          res.end(JSON.stringify({
-            error: `recipient '${to}' is offline`,
-            message: `Agent '${to}' is registered but not currently connected. Pick a different recipient or ask the user who to contact instead.`,
-            online,
-          }));
-          return;
-        }
+        // Recipient is local. Store direct messages even when the recipient is
+        // currently offline; hub/bridge cursors deliver backlog on reconnect.
       }
 
       const msgBody = typeof message === 'string' ? message : JSON.stringify(message);

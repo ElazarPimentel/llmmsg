@@ -10,7 +10,7 @@ import os from 'node:os';
 import blessed from 'blessed';
 import Database from 'better-sqlite3';
 
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 
 // ---------- Settings ----------
 
@@ -25,7 +25,7 @@ const defaultSettings = {
   agent: 'elazar-tui',
   hubHost: '127.0.0.1',
   hubPort: 9701,
-  defaultRooms: [],
+  joinedRooms: [],
   bell: true,
   sidebarWidth: 30,
 };
@@ -41,6 +41,19 @@ function loadSettings() {
 
 function saveSettings(settings) {
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2));
+}
+
+function normalizeAroName(room) {
+  return String(room || '').trim().replace(/^aro:/, '').toLowerCase();
+}
+
+function persistJoinedRooms() {
+  settings.joinedRooms = [...state.rooms]
+    .map(normalizeAroName)
+    .filter(Boolean)
+    .sort();
+  saveSettings(settings);
+  logEvent('info', 'settings_saved', { joinedRooms: settings.joinedRooms });
 }
 
 // ---------- Event logger ----------
@@ -184,7 +197,7 @@ function addMessage(bucket, entry) {
 const screen = blessed.screen({
   smartCSR: true,
   title: `llmmsg-chat v${VERSION} (${AGENT})`,
-  fullUnicode: true,
+  // fullUnicode removed in v0.2.2: caused character-doubling on some terminals
 });
 
 const sidebar = blessed.list({
@@ -518,11 +531,17 @@ async function handleCommand(cmd, arg, rest) {
       break;
     case 'join': {
       if (!arg) return systemLog('Usage: /join <aro-name>');
-      const aro = arg.toLowerCase();
+      const aro = normalizeAroName(arg);
       const r = await hub.aroJoin(aro, state.agent);
       if (r.status === 200) {
-        state.rooms.add(`aro:${aro}`);
+        const room = `aro:${aro}`;
+        state.rooms.add(room);
+        persistJoinedRooms();
+        state.currentTarget = room;
+        state.unreadBuckets.delete(room);
         updateSidebar();
+        renderView(room);
+        updateStatus();
         systemLog(`joined aro:${aro}`);
       } else {
         systemLog(`join failed: ${r.body?.error || r.status}`);
@@ -531,10 +550,11 @@ async function handleCommand(cmd, arg, rest) {
     }
     case 'leave': {
       if (!arg) return systemLog('Usage: /leave <aro-name>');
-      const aro = arg.replace(/^aro:/, '').toLowerCase();
+      const aro = normalizeAroName(arg);
       const r = await hub.aroLeave(aro, state.agent);
       if (r.status === 200) {
         state.rooms.delete(`aro:${aro}`);
+        persistJoinedRooms();
         if (state.currentTarget === `aro:${aro}`) state.currentTarget = null;
         updateSidebar();
         updateStatus();
@@ -656,55 +676,79 @@ function showPrompt(label, callback) {
 
 // ---------- Key bindings ----------
 
+const keyActions = {
+  f1: () => {
+    logEvent('info', 'key_action', { key: 'f1', action: 'show_help' });
+    systemLog('F1 help · F2 join · F3 leave · F4 who · F5 rooms · F6 msg · F7 invite · F9 quit · Tab sidebar · Esc focus input');
+  },
+  f2: () => {
+    logEvent('info', 'key_action', { key: 'f2', action: 'prompt_join_aro' });
+    showPrompt('Join ARO (name)', (v) => handleCommand('join', v, v.split(' ')));
+  },
+  f3: () => {
+    logEvent('info', 'key_action', { key: 'f3', action: 'prompt_leave_aro' });
+    showPrompt('Leave ARO (name)', (v) => handleCommand('leave', v, v.split(' ')));
+  },
+  f4: async () => {
+    logEvent('info', 'key_action', { key: 'f4', action: 'run_who' });
+    await handleCommand('who', '', []);
+  },
+  f5: async () => {
+    logEvent('info', 'key_action', { key: 'f5', action: 'list_rooms' });
+    await handleCommand('rooms', '', []);
+  },
+  f6: () => {
+    logEvent('info', 'key_action', { key: 'f6', action: 'prompt_dm' });
+    showPrompt('DM (agent text...)', (v) => {
+      const parts = v.split(' ');
+      handleCommand('msg', v, parts);
+    });
+  },
+  f7: () => {
+    logEvent('info', 'key_action', { key: 'f7', action: 'prompt_invite' });
+    showPrompt('Invite (agent aro)', (v) => {
+      const parts = v.split(' ');
+      handleCommand('invite', v, parts);
+    });
+  },
+  f9: () => {
+    logEvent('info', 'key_action', { key: 'f9', action: 'quit' });
+    shutdown();
+  },
+  tab: () => {
+    logEvent('info', 'key_action', { key: 'tab', action: 'focus_sidebar' });
+    sidebar.focus();
+    screen.render();
+  },
+  escape: () => {
+    logEvent('info', 'key_action', { key: 'escape', action: 'focus_input_rearm' });
+    input.focus();
+    promptInput();
+    screen.render();
+  },
+};
+
 screen.key(['C-c', 'C-q'], () => { shutdown(); });
-screen.key(['f9'], () => {
-  logEvent('info', 'key_action', { key: 'f9', action: 'quit' });
-  shutdown();
-});
-screen.key(['f1'], () => {
-  logEvent('info', 'key_action', { key: 'f1', action: 'show_help' });
-  systemLog('F1 help · F2 join · F3 leave · F4 who · F5 rooms · F6 msg · F7 invite · F9 quit · Tab sidebar · Esc focus input');
-});
-screen.key(['f2'], () => {
-  logEvent('info', 'key_action', { key: 'f2', action: 'prompt_join_aro' });
-  showPrompt('Join ARO (name)', (v) => handleCommand('join', v, v.split(' ')));
-});
-screen.key(['f3'], () => {
-  logEvent('info', 'key_action', { key: 'f3', action: 'prompt_leave_aro' });
-  showPrompt('Leave ARO (name)', (v) => handleCommand('leave', v, v.split(' ')));
-});
-screen.key(['f4'], async () => {
-  logEvent('info', 'key_action', { key: 'f4', action: 'run_who' });
-  await handleCommand('who', '', []);
-});
-screen.key(['f5'], async () => {
-  logEvent('info', 'key_action', { key: 'f5', action: 'list_rooms' });
-  await handleCommand('rooms', '', []);
-});
-screen.key(['f6'], () => {
-  logEvent('info', 'key_action', { key: 'f6', action: 'prompt_dm' });
-  showPrompt('DM (agent text...)', (v) => {
-    const parts = v.split(' ');
-    handleCommand('msg', v, parts);
+// Bind only on screen (not on input) — input.key would stack listeners and
+// cause character doubling when the textbox is in readInput mode.
+for (const [key, action] of Object.entries(keyActions)) {
+  screen.key([key], action);
+}
+
+screen.program.on('keypress', (ch, key) => {
+  const keyName = key?.name || null;
+  logEvent('debug', 'raw_keypress', {
+    name: keyName,
+    full: key?.full || null,
+    sequence: key?.sequence || null,
+    ch: ch || null,
+    ctrl: !!key?.ctrl,
+    meta: !!key?.meta,
+    shift: !!key?.shift,
   });
-});
-screen.key(['f7'], () => {
-  logEvent('info', 'key_action', { key: 'f7', action: 'prompt_invite' });
-  showPrompt('Invite (agent aro)', (v) => {
-    const parts = v.split(' ');
-    handleCommand('invite', v, parts);
-  });
-});
-screen.key(['tab'], () => {
-  logEvent('info', 'key_action', { key: 'tab', action: 'focus_sidebar' });
-  sidebar.focus();
-  screen.render();
-});
-screen.key(['escape'], () => {
-  logEvent('info', 'key_action', { key: 'escape', action: 'focus_input_rearm' });
-  input.focus();
-  promptInput();
-  screen.render();
+  if (keyName && keyActions[keyName]) {
+    keyActions[keyName]();
+  }
 });
 
 sidebar.on('select', (_item, index) => {
@@ -757,11 +801,14 @@ async function startup() {
     }
   } catch {}
 
-  for (const room of settings.defaultRooms || []) {
-    const aro = room.replace(/^aro:/, '').toLowerCase();
+  const configuredRooms = settings.joinedRooms || settings.defaultRooms || [];
+  for (const room of configuredRooms) {
+    const aro = normalizeAroName(room);
+    if (!aro) continue;
     await hub.aroJoin(aro, state.agent);
     state.rooms.add(`aro:${aro}`);
   }
+  if (!Array.isArray(settings.joinedRooms)) persistJoinedRooms();
   updateSidebar();
 
   try {

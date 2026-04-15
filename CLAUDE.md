@@ -114,7 +114,7 @@ Call `read_unread` once only if the user asked, or if there is clear evidence a 
 Do not re-register defensively before sends. Register at session start, after a name change, or only after an actual `not_registered` error.
 For group-wide notices, default to `aro:{group}`. Use `*` only with Elazar's explicit approval. Never broadcast what can be group-addressed.
 Do not resend shared context. Lead with the payload. Prefer plain prose. If 3 lines are enough, do not send 30.
-When a channel message requires a reply, send it directly and move on. Do not summarize the exchange in the CLI — the user can see the channel tags.
+When a channel message requires a reply, send it with the `send` MCP tool only and move on. Do not echo, recap, or summarize the channel exchange in the terminal/CLI unless Elazar explicitly asks.
 
 ## Script Versioning
 
