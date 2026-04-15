@@ -3,3 +3,8 @@ node_modules/
 db/
 __pycache__/
 codex-llmmsg-app/registrations.json
+# Per-machine agent name state (launcher-managed). Must not be tracked
+# because each host/folder needs its own local value.
+.agent-name
+.agent-name-cc
+.agent-name-ca
