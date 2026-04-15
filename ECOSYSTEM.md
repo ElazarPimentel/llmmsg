@@ -49,7 +49,7 @@ Conceptually: sessions → launcher scripts → MCP channel server → hub → S
 ### Launchers
 
 **Live source:** `~/Documents/terminal/sh/` (in PATH, user-owned, edited directly)
-**Symlink mirror:** `/opt/llmmsg/launchers/` (read-only discovery; **never edit via this path**)
+**Symlink mirror:** `/opt/llmmsg/launchers/` — tracked git symlinks pointing at the live source. On fresh clones the symlinks dangle until the user has set up `~/Documents/terminal/sh/`. **Never edit via this path** (editing a symlink edits the live target and confuses provenance).
 
 | Script | Classification | Role |
 |---|---|---|
@@ -149,7 +149,7 @@ remote hub /inbound ── POST over SSH tunnel ──► remote SQLite
 | `/opt/llmmsg/codex-llmmsg-app/bridge-state.sqlite` | bridge | `delivery_cursor` tracking last-delivered id per Codex agent. Separate from main DB for bridge write-isolation. |
 | `<cwd>/.agent-name-cc` | CC launchers | Per-project CC agent name (ccs.sh, ccsn.sh). Auto-created on first ccs launch. |
 | `<cwd>/.agent-name-ca` | Codex launchers | Per-project Codex agent name (cf.sh, cfn.sh). Auto-created on first cf launch. |
-| `<cwd>/.agent-name` | legacy | Pre-split unified agent name file. Launchers still read it as fallback for backwards compatibility. |
+| `<cwd>/.agent-name` | legacy | Deprecated pre-split unified agent name file. Launchers hard-error if present and print a migration command to create `.agent-name-cc` or `.agent-name-ca`. |
 | `~/.codex/state_5.sqlite` | Codex | Thread history DB (used by cf.sh for bootstrap thread lookup) |
 | `~/.claude.json` | Claude Code | MCP config (`mcpServers.llmmsg-channel` entry) |
 | `~/.codex/config.toml` | Codex | MCP config (`[mcp_servers.llmmsg-channel]` section) |
@@ -213,6 +213,7 @@ Rules the ecosystem enforces. Future `llmmsg-doctor` will validate these.
 12. **Inbound auth:** when `LLMMSG_INBOUND_SECRET` is configured, `/inbound` requires matching Bearer token; both sites must use the same value. Binding the hub to `0.0.0.0` without the secret is allowed but logs a warning. Multi-site deployments must set the secret on all participating hubs.
 13. **Host config mandatory:** `/etc/llmmsg/site.conf` MUST exist on every host. Hub and launchers hard-error on startup if missing. Contains `SITE_SUFFIX` (may be empty — explicit opt-in to "no suffix"), `LLMMSG_SITE`, `LLMMSG_ARO_SEGMENT`. Secrets (`LLMMSG_INBOUND_SECRET`) stay in env, never in this file. Override for tests via `LLMMSG_SITE_CONF=/path/to/alt.conf`.
 14. **Agent name resolution priority:** launchers resolve agent label in strict order: explicit `--agent` / positional LABEL > `.agent-name-{cc|ca}` file > `LLMMSG_AGENT` env > cwd basename. Ambient env var must NOT silently override a per-folder file. Final effective label is validated against `SITE_SUFFIX`; mismatch hard-errors with a one-line fix command before any bridge registration write.
+15. **Legacy agent-name file retired:** `.agent-name` is no longer a valid source of truth. If present, launchers stop and print a migration command; they do not silently read or migrate it.
 
 ---
 

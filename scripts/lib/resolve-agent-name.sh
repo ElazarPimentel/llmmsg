@@ -4,9 +4,13 @@
 # See /opt/llmmsg/ECOSYSTEM.md
 #
 # Exports no variables by itself. Provides functions:
-#   load_site_conf            — sources ${LLMMSG_SITE_CONF:-/etc/llmmsg/site.conf}
-#                               into SITE_SUFFIX, LLMMSG_SITE, LLMMSG_ARO_SEGMENT.
+#   load_site_conf            — reads ${LLMMSG_SITE_CONF:-/etc/llmmsg/site.conf}
+#                               and sets SITE_SUFFIX, LLMMSG_SITE, LLMMSG_ARO_SEGMENT.
 #                               Hard-errors if the file is missing.
+#                               Env var LLMMSG_SITE_SUFFIX overrides the file value
+#                               (used for testing). LLMMSG_SITE and LLMMSG_ARO_SEGMENT
+#                               env vars are NOT overridden by this helper; the hub
+#                               handles those overrides independently.
 #
 #   resolve_agent_label KIND [--dry-run]
 #                             — KIND is 'cc' or 'ca'. Resolves the effective
@@ -27,8 +31,8 @@
 #   - Must set ORIGINAL_CWD to the real working directory before calling
 #     resolve_agent_label (capture BEFORE any --worktree chdir).
 #   - May pre-seed $LABEL with an explicit CLI value; function will honor it.
-#   - Must NOT export SITE_SUFFIX or LLMMSG_SITE before calling load_site_conf;
-#     env-var overrides are applied inside the function.
+#   - Must NOT export SITE_SUFFIX before calling load_site_conf; use
+#     LLMMSG_SITE_SUFFIX for the only supported per-var override.
 
 _llmmsg_die() {
     echo "error: $1" >&2
@@ -117,8 +121,12 @@ resolve_agent_label() {
         label="$(head -1 "$file" | tr -d '[:space:]')"
         label_source="file"
     elif [[ -z "$label" && -f "$legacy" ]]; then
-        label="$(head -1 "$legacy" | tr -d '[:space:]')"
-        label_source="legacy-file"
+        local legacy_content fixed_legacy_label
+        legacy_content="$(head -1 "$legacy" | tr -d '[:space:]')"
+        fixed_legacy_label="$(_llmmsg_default_label "${legacy_content,,}")"
+        _llmmsg_die \
+            "legacy .agent-name found at $legacy; split files .agent-name-{cc,ca} are canonical" \
+            "trash '$legacy' && echo '$fixed_legacy_label' > '$file'"
     fi
 
     if [[ -z "$label" && -n "${LLMMSG_AGENT:-}" ]]; then
@@ -143,12 +151,14 @@ resolve_agent_label() {
             "echo '$fixed_label' > '$file'"
     fi
 
-    # Auto-create on miss (not in dry-run)
-    if [[ "$dry_run" -eq 0 && ! -f "$file" && "$label_source" != "legacy-file" ]]; then
-        if [[ "$label_source" == "basename" || "$label_source" == "env" ]]; then
-            echo "$label" > "$file"
-            echo "resolve-agent-name: created $file with '$label'" >&2
-        fi
+    # Auto-create on miss (not in dry-run).
+    if [[ "$dry_run" -eq 0 && ! -f "$file" ]]; then
+        case "$label_source" in
+            basename|env)
+                echo "$label" > "$file"
+                echo "resolve-agent-name: created $file with '$label' (source: $label_source)" >&2
+                ;;
+        esac
     fi
 
     printf '%s' "$label"

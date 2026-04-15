@@ -115,7 +115,7 @@ test_env_wrong_suffix_hard_error() {
     mkdir -p "$cwd"
     _write_site_conf "$conf" "-l" "lezama" "1"
     local out rc
-    out="$( (cd "$cwd" &&env -i PATH="$PATH" HOME="$HOME" LLMMSG_SITE_CONF="$conf" LLMMSG_AGENT="work-without-suffix" ORIGINAL_CWD="$cwd" bash -c "source $HELPER; load_site_conf; resolve_agent_label cc") 2>&1 )" ; rc=$?
+    out="$( (cd "$cwd" && env -i PATH="$PATH" HOME="$HOME" LLMMSG_SITE_CONF="$conf" LLMMSG_AGENT="work-without-suffix" ORIGINAL_CWD="$cwd" bash -c "source $HELPER; load_site_conf; resolve_agent_label cc") 2>&1 )" ; rc=$?
     _assert_exit "env_wrong_suffix exit nonzero" 1 "$rc" || { trash "$tmp"; return; }
     _assert_contains "env_wrong_suffix error msg" "does not have required suffix" "$out" || { trash "$tmp"; return; }
     _assert_contains "env_wrong_suffix fix line" "echo" "$out" || { trash "$tmp"; return; }
@@ -226,6 +226,33 @@ test_cli_agent_wrong_suffix_no_bridge_write() {
     trash "$tmp"
 }
 
+test_legacy_agent_name_hard_error() {
+    echo "[7] test_legacy_agent_name_hard_error"
+    local tmp conf cwd
+    tmp="$(_tmpdir)"
+    conf="$tmp/site.conf"
+    cwd="$tmp/legacy-folder"
+    mkdir -p "$cwd"
+    _write_site_conf "$conf" "-l" "lezama" "1"
+    echo "legacy-agent" > "$cwd/.agent-name"
+
+    local out rc
+    out="$(_run_helper_in_dir "$cwd" "$conf" cc 2>&1)" ; rc=$?
+    _assert_exit "legacy_agent_name exit nonzero" 1 "$rc" || { trash "$tmp"; return; }
+    _assert_contains "legacy_agent_name error msg" "legacy .agent-name found" "$out" || { trash "$tmp"; return; }
+    _assert_contains "legacy_agent_name fix command" "trash '$cwd/.agent-name'" "$out" || { trash "$tmp"; return; }
+    _assert_contains "legacy_agent_name split file" ".agent-name-cc" "$out" || { trash "$tmp"; return; }
+    [[ ! -f "$cwd/.agent-name-cc" ]] || {
+        echo "  FAIL: .agent-name-cc should not be auto-created from legacy file"
+        FAIL=$((FAIL + 1))
+        FAILED_TESTS+=("legacy_agent_name no auto-create")
+        trash "$tmp"
+        return
+    }
+    _pass "legacy_agent_name_hard_error"
+    trash "$tmp"
+}
+
 # ---------- main ----------
 
 run_all() {
@@ -235,6 +262,7 @@ run_all() {
     test_missing_config_hard_error
     test_worktree_original_cwd
     test_cli_agent_wrong_suffix_no_bridge_write
+    test_legacy_agent_name_hard_error
 }
 
 main() {
