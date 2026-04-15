@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '2.8';
+const VERSION = '2.9';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
@@ -462,6 +462,18 @@ const server = http.createServer(async (req, res) => {
       stmtUpdateLastSeen.run(agent); // refresh last_seen_at so ARO fanout keeps this agent active
       console.log(`[connect] ${agent} (${channels.size} connected)`);
 
+      // Deliver any unread messages so the agent catches up on anything
+      // stored between /register and /connect (onboarding guide, missed
+      // direct sends, etc.). Cursor is advanced by sendToChannel-equivalent
+      // path below. Skip for bridged Codex agents — the bridge owns cursor.
+      if (!isCodexAgent(agent) || !hasActiveBridgeRegistration(agent)) {
+        const unread = getUnreadMessages(agent);
+        for (const msg of unread) {
+          res.write(`data: ${JSON.stringify(msg)}\n\n`);
+          stmtUpsertCursor.run(agent, msg.id);
+        }
+      }
+
       req.on('close', () => {
         // Only delete if this response is still the active one (not replaced by a newer connection)
         if (channels.get(agent) === res) {
@@ -508,9 +520,24 @@ const server = http.createServer(async (req, res) => {
       // First-time registration: initialize cursor at MAX(id) so the agent
       // starts "caught up" without receiving the full broadcast backlog.
       // Existing agents keep their cursor (upsert only inserts if missing).
-      if (!stmtGetCursor.get(agent)) {
+      // Also send the messaging guide as a regular inbound message so it
+      // lands in the agent's inbox via the normal SSE/bridge delivery path.
+      const isFirstTimeRegister = !stmtGetCursor.get(agent);
+      if (isFirstTimeRegister) {
         const maxRow = db.prepare(`SELECT COALESCE(MAX(id), 0) AS max_id FROM messages`).get();
         stmtUpsertCursor.run(agent, maxRow.max_id);
+
+        // Seed the system agent in the roster so it can send messages.
+        stmtRegister.run('system', '/opt/llmmsg');
+
+        // Insert the guide as a direct system message. Stored with id >
+        // cursor, so the existing getUnreadMessages catch-up path (either
+        // /register below or /connect below) delivers it when SSE attaches.
+        const guideRow = stmtGetConfig.get('message_guide');
+        if (guideRow && guideRow.value) {
+          const guideBody = JSON.stringify({ message: `Messaging guide v${guideRow.version}:\n${guideRow.value}` });
+          try { sendMessage('system', agent, null, guideBody); } catch {}
+        }
       }
 
       // Auto-join aro: extract project name from agent name segments

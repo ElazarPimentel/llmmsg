@@ -332,19 +332,11 @@ if (currentAgent) {
             meta: { from: 'system', to: currentAgent, tag: `identity-${currentAgent}` },
           },
         });
-        // Send guide on first register
-        try {
-          const guide = await httpGet('/guide');
-          if (guide.guide) {
-            mcp.notification({
-              method: 'notifications/claude/channel',
-              params: {
-                content: `Messaging guide v${guide.version}:\n${guide.guide}`,
-                meta: { from: 'system', to: currentAgent, tag: `guide-v${guide.version}` },
-              },
-            });
-          }
-        } catch {}
+        // Guide is now pushed server-side: the hub inserts a system
+        // message containing the current guide into the messages table on
+        // first-time /register. Delivered via the standard SSE/bridge push
+        // path, which works reliably mid-turn (unlike pre-turn notifications
+        // that would fire during MCP initialization and be dropped by CC).
       } else {
         console.error(`[llmmsg-channel] auto-register failed:`, JSON.stringify(result));
       }
