@@ -10,7 +10,7 @@ import os from 'node:os';
 import blessed from 'blessed';
 import Database from 'better-sqlite3';
 
-const VERSION = '0.2.2';
+const VERSION = '0.2.3';
 
 // ---------- Settings ----------
 
@@ -313,14 +313,15 @@ function renderView(bucket) {
 }
 
 function printMessage(msg, showContext) {
-  const { from, to, body, _bucket } = msg;
+  const { from, to, body, _bucket, origin_aro } = msg;
   const ts = new Date().toTimeString().slice(0, 8);
   let text = typeof body === 'object' ? (body.message || JSON.stringify(body)) : String(body);
 
   // Context prefix: show what kind of message this is
   let prefix = '';
   if (showContext) {
-    if (_bucket && _bucket.startsWith('aro:')) prefix = `[${_bucket}] `;
+    const room = origin_aro || _bucket;
+    if (room && room.startsWith('aro:')) prefix = `[${room}] `;
     else if (from === state.agent) prefix = `[→${to}] `;
     else if (to === state.agent) prefix = `[DM] `;
     else prefix = `[→${to}] `;
@@ -328,7 +329,7 @@ function printMessage(msg, showContext) {
 
   let color = 'white';
   if (from === state.agent) color = 'cyan';
-  else if (to === state.agent) color = 'yellow';
+  else if (to === state.agent && !origin_aro) color = 'yellow';
 
   chatPane.log(`{grey-fg}${ts}{/grey-fg} ${prefix}{${color}-fg}<${from}>{/${color}-fg} ${text}`);
 }
@@ -409,31 +410,30 @@ function connectSSE() {
 }
 
 function handleIncoming(event) {
-  logEvent('debug', 'sse_event', { id: event.id, from: event.from, to: event.to, tag: event.tag });
+  logEvent('debug', 'sse_event', { id: event.id, from: event.from, to: event.to, tag: event.tag, origin_aro: event.origin_aro || null });
 
-  // Bucket attribution: best-effort, based on reply-to-recent-tag.
-  // Without origin_aro on messages, we cannot reliably distinguish DMs from
-  // ARO fanout rows (both have recipient=me). So we ALWAYS render incoming
-  // messages in the current view regardless of bucket, to avoid losing visibility.
-  let bucket = null;
+  // Bucket attribution: origin_aro is authoritative for ARO fanout rows.
+  // Fallback to reply-to-recent-tag only for older messages sent before origin_aro.
+  let bucket = event.origin_aro || null;
   if (event.re && state.recentTags.has(event.re)) {
-    bucket = state.recentTags.get(event.re);
+    bucket ||= state.recentTags.get(event.re);
   }
   const entry = { ...event };
   if (bucket) entry._bucket = bucket;
   addMessage(bucket || '__all__', entry);
 
-  // Also store in DM bucket keyed by sender for history
-  if (event.to === state.agent && event.from !== state.agent) {
+  // Also store true DMs in sender bucket for history.
+  if (!event.origin_aro && event.to === state.agent && event.from !== state.agent) {
     if (!state.history[event.from]) state.history[event.from] = [];
     state.history[event.from].push(entry);
     if (state.history[event.from].length > 200) state.history[event.from].shift();
   }
 
-  // Unread tracking: count DMs against the sender bucket when we're not viewing it
+  // Unread tracking: ARO fanout counts against its room; true DMs against sender.
   const viewing = state.currentTarget;
-  if (event.to === state.agent && viewing !== event.from) {
-    state.unreadBuckets.set(event.from, (state.unreadBuckets.get(event.from) || 0) + 1);
+  const unreadBucket = event.origin_aro || (event.to === state.agent ? event.from : null);
+  if (unreadBucket && viewing !== unreadBucket) {
+    state.unreadBuckets.set(unreadBucket, (state.unreadBuckets.get(unreadBucket) || 0) + 1);
     updateSidebar();
   }
 
@@ -443,7 +443,7 @@ function handleIncoming(event) {
   printMessage(entry, true); // true = show bucket/from-to context
   screen.render();
 
-  if (settings.bell && event.to === state.agent && event.from !== state.agent) {
+  if (settings.bell && !event.origin_aro && event.to === state.agent && event.from !== state.agent) {
     process.stdout.write('\x07');
   }
 }

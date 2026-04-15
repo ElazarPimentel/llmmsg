@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
 
-const VERSION = '2.0';
+const VERSION = '2.1';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_HOST = process.env.LLMMSG_HUB_HOST || '127.0.0.1';
 const HUB_URL = `http://${HUB_HOST}:${HUB_PORT}`;
@@ -372,6 +372,7 @@ function connectToHub() {
                   from: event.from,
                   to: event.to,
                   tag: event.tag,
+                  ...(event.origin_aro ? { origin_aro: event.origin_aro } : {}),
                   ...(event.re ? { re: event.re } : {}),
                 },
               },

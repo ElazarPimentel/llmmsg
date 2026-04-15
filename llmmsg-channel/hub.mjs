@@ -79,6 +79,8 @@ for (const migration of [
   `ALTER TABLE roster ADD COLUMN last_seen_at INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE messages ADD COLUMN origin_tag TEXT`,
   `CREATE INDEX IF NOT EXISTS idx_origin_tag ON messages(origin_tag) WHERE origin_tag IS NOT NULL`,
+  `ALTER TABLE messages ADD COLUMN origin_aro TEXT`,
+  `CREATE INDEX IF NOT EXISTS idx_origin_aro ON messages(origin_aro) WHERE origin_aro IS NOT NULL`,
 ]) {
   try { db.exec(migration); }
   catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
@@ -149,11 +151,11 @@ function safeParse(str) {
 
 // Prepared statements
 const stmtInsertMsg = db.prepare(
-  `INSERT INTO messages (sender, recipient, tag, re, body) VALUES (?, ?, '_pending', ?, ?) RETURNING id`
+  `INSERT INTO messages (sender, recipient, tag, re, body, origin_aro) VALUES (?, ?, '_pending', ?, ?, ?) RETURNING id`
 );
 const stmtUpdateTag = db.prepare(`UPDATE messages SET tag = ? WHERE id = ?`);
 const stmtMessagesSince = db.prepare(
-  `SELECT id, sender, recipient, tag, re, body FROM messages
+  `SELECT id, sender, recipient, tag, re, body, origin_aro FROM messages
    WHERE (recipient = ? OR recipient = '*') AND id > ? AND retracted_at IS NULL ORDER BY id`
 );
 const stmtUnreadCount = db.prepare(
@@ -182,16 +184,16 @@ const stmtThread = db.prepare(
      UNION
      SELECT m.tag FROM messages m JOIN thread_tags tt ON m.re = tt.t
    )
-   SELECT id, sender, recipient, tag, re, body, retracted_at FROM messages
+   SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM messages
    WHERE tag IN (SELECT t FROM thread_tags) OR re IN (SELECT t FROM thread_tags)
    ORDER BY id`
 );
 const stmtSearch = db.prepare(
-  `SELECT id, sender, recipient, tag, re, body FROM messages
+  `SELECT id, sender, recipient, tag, re, body, origin_aro FROM messages
    WHERE body LIKE ? AND retracted_at IS NULL ORDER BY id`
 );
 const stmtLog = db.prepare(
-  `SELECT id, sender, recipient, tag, re, body, retracted_at FROM messages ORDER BY id DESC LIMIT ?`
+  `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM messages ORDER BY id DESC LIMIT ?`
 );
 const stmtCheckRoster = db.prepare(`SELECT 1 FROM roster WHERE agent = ?`);
 const stmtCheckOnline = db.prepare(
@@ -305,7 +307,7 @@ function pollForDirectWrites() {
     let maxId = cursorId;
     for (const r of rows) {
       if (r.id > maxId) maxId = r.id;
-      const event = { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body) };
+      const event = { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
       sendToChannel(agent, event);
     }
     // sendToChannel already handles cursor for non-bridged agents
@@ -342,14 +344,17 @@ function broadcastToChannels(event, excludeSender) {
   }
 }
 
-// Send message and push to connected channels
-const sendMessage = db.transaction((sender, recipient, reTag, body) => {
-  const row = stmtInsertMsg.get(sender, recipient, reTag || null, body);
+// Send message and push to connected channels.
+// originAro (optional) is the aro:X target the sender asked for; stored on
+// the per-recipient row so the TUI/agents can reconstruct room attribution
+// for ARO fanout messages (which otherwise look like per-member DMs).
+const sendMessage = db.transaction((sender, recipient, reTag, body, originAro = null) => {
+  const row = stmtInsertMsg.get(sender, recipient, reTag || null, body, originAro);
   const id = row.id;
   const tag = `${sender}-${id}`;
   stmtUpdateTag.run(tag, id);
 
-  const event = { id, from: sender, to: recipient, tag, re: reTag || null, body: safeParse(body) };
+  const event = { id, from: sender, to: recipient, tag, re: reTag || null, body: safeParse(body), origin_aro: originAro || null };
 
   if (recipient === '*') {
     broadcastToChannels(event, sender);
@@ -368,7 +373,7 @@ function readMessages(agent) {
   let maxId = cursorId;
   const messages = rows.map(r => {
     if (r.id > maxId) maxId = r.id;
-    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body) };
+    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
   });
 
   if (maxId > cursorId) {
@@ -382,7 +387,7 @@ function getUnreadMessages(agent) {
   const cursorRow = stmtGetCursor.get(agent);
   const cursorId = cursorRow ? cursorRow.read_id : 0;
   return stmtMessagesSince.all(agent, cursorId).map((r) => {
-    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body) };
+    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
   });
 }
 
@@ -665,7 +670,8 @@ const server = http.createServer(async (req, res) => {
           return;
         }
         const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
-        const results = members.map(member => sendMessage(from, member, re || null, msgBody));
+        const originAro = `aro:${aroName}`;
+        const results = members.map(member => sendMessage(from, member, re || null, msgBody, originAro));
         res.end(JSON.stringify({ ok: true, aro: aroName, members, sent: results.length, ids: results.map(r => r.id) }));
         return;
       }
@@ -758,8 +764,8 @@ const server = http.createServer(async (req, res) => {
       if (!tag) { res.writeHead(400); res.end(JSON.stringify({ error: 'missing tag' })); return; }
       const rows = stmtThread.all(tag);
       const messages = rows.map(r => {
-        if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true };
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body) };
+        if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
       });
       res.end(JSON.stringify(messages));
       return;
@@ -770,7 +776,7 @@ const server = http.createServer(async (req, res) => {
       if (!text) { res.writeHead(400); res.end(JSON.stringify({ error: 'missing q' })); return; }
       const rows = stmtSearch.all(`%${text}%`);
       const messages = rows.map(r => {
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body) };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
       });
       res.end(JSON.stringify(messages));
       return;
@@ -780,10 +786,10 @@ const server = http.createServer(async (req, res) => {
       const limit = parseInt(url.searchParams.get('limit') || '20');
       const rows = stmtLog.all(limit);
       const messages = rows.map(r => {
-        if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true };
+        if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null };
         const body = safeParse(r.body);
         const preview = typeof body === 'object' ? (body.summary || body.message || JSON.stringify(body)).slice(0, 120) : String(body).slice(0, 120);
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, preview };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, preview, origin_aro: r.origin_aro || null };
       });
       res.end(JSON.stringify(messages));
       return;
