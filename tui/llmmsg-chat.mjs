@@ -2,23 +2,24 @@
 // llmmsg-ecosystem
 // llmmsg-chat.mjs - TUI chat client for llmmsg-channel (human agent)
 // See /opt/llmmsg/ECOSYSTEM.md
-//
-// Registers as a regular agent with the llmmsg hub, subscribes to SSE for
-// push delivery, and provides a blessed-based chat TUI with sidebar (joined
-// AROs), chat pane, and input box. IRC-style commands via /command syntax.
 
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import blessed from 'blessed';
+import Database from 'better-sqlite3';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.1';
 
 // ---------- Settings ----------
 
-const SETTINGS_DIR = path.join(os.homedir(), '.config', 'llmmsg-chat');
-const SETTINGS_PATH = path.join(SETTINGS_DIR, 'settings.json');
+const CONFIG_DIR = path.join(os.homedir(), '.config', 'llmmsg-chat');
+const SETTINGS_PATH = path.join(CONFIG_DIR, 'settings.json');
+const EVENTS_DB_PATH = path.join(CONFIG_DIR, 'llmmsg-chat.sqlite');
+const DEBUG = true; // hardcoded debug logger; toggle later if needed
+
+fs.mkdirSync(CONFIG_DIR, { recursive: true });
 
 const defaultSettings = {
   agent: 'elazar-tui',
@@ -26,12 +27,7 @@ const defaultSettings = {
   hubPort: 9701,
   defaultRooms: [],
   bell: true,
-  colors: {
-    self: 'cyan',
-    dm: 'yellow',
-    room: 'white',
-    system: 'grey',
-  },
+  sidebarWidth: 30,
 };
 
 function loadSettings() {
@@ -44,8 +40,38 @@ function loadSettings() {
 }
 
 function saveSettings(settings) {
-  fs.mkdirSync(SETTINGS_DIR, { recursive: true });
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2));
+}
+
+// ---------- Event logger ----------
+
+const eventsDb = new Database(EVENTS_DB_PATH);
+eventsDb.pragma('journal_mode = WAL');
+eventsDb.exec(`
+  CREATE TABLE IF NOT EXISTS events (
+    id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts    TEXT NOT NULL DEFAULT (strftime('%s','now')),
+    level TEXT NOT NULL,
+    event TEXT NOT NULL,
+    data  TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
+`);
+// Retention cap: keep last 10k events max. Pruned once on startup.
+eventsDb.exec(`
+  DELETE FROM events WHERE id <= (
+    SELECT COALESCE(MAX(id), 0) - 10000 FROM events
+  )
+`);
+const stmtLogEvent = eventsDb.prepare(
+  `INSERT INTO events (level, event, data) VALUES (?, ?, ?)`
+);
+
+function logEvent(level, event, data = null) {
+  if (!DEBUG && level === 'debug') return;
+  try {
+    stmtLogEvent.run(level, event, data ? JSON.stringify(data) : null);
+  } catch {}
 }
 
 // ---------- CLI args ----------
@@ -58,24 +84,25 @@ for (let i = 0; i < args.length; i++) {
   if (args[i] === '--agent' && args[i + 1]) { cliAgent = args[i + 1]; i++; }
   else if (args[i] === '--host' && args[i + 1]) { cliHost = args[i + 1]; i++; }
   else if (args[i] === '--port' && args[i + 1]) { cliPort = parseInt(args[i + 1]); i++; }
+  else if (args[i] === '--version' || args[i] === '-V') {
+    console.log(`llmmsg-chat v${VERSION}`);
+    process.exit(0);
+  }
   else if (args[i] === '--help' || args[i] === '-h') {
     console.log(`llmmsg-chat v${VERSION} - TUI chat client for llmmsg-channel`);
     console.log('');
     console.log('Usage: llmmsg-chat [--agent NAME] [--host HOST] [--port PORT]');
     console.log('');
-    console.log('Commands (once running):');
-    console.log('  /join <aro>       Join an ARO room');
-    console.log('  /leave <aro>      Leave an ARO room');
-    console.log('  /rooms            List joined rooms');
-    console.log('  /room <aro|dm>    Switch active send target');
-    console.log('  /who [aro]        List online agents (optionally in an ARO)');
-    console.log('  /msg <agent> <text>   Send a direct message');
-    console.log('  /invite <agent> <aro> Ask an agent to join an ARO');
-    console.log('  /guide            Show the messaging guide');
-    console.log('  /settings         Show current settings');
-    console.log('  /quit             Exit');
+    console.log('Once running:');
+    console.log('  F1   Help / menu       F9  Quit');
+    console.log('  F2   /join <aro>       F3  /leave <aro>');
+    console.log('  F4   /who              F5  /rooms');
+    console.log('  F6   /msg <agent>      F7  /invite <agent> <aro>');
+    console.log('  Tab / Shift-Tab        switch rooms in sidebar');
+    console.log('  Esc                    focus input');
     console.log('');
     console.log(`Settings: ${SETTINGS_PATH}`);
+    console.log(`Event log: ${EVENTS_DB_PATH}`);
     process.exit(0);
   }
 }
@@ -88,15 +115,14 @@ if (cliPort) settings.hubPort = cliPort;
 const AGENT = settings.agent.toLowerCase();
 const HUB_URL = `http://${settings.hubHost}:${settings.hubPort}`;
 
+logEvent('info', 'startup', { version: VERSION, agent: AGENT, hub: HUB_URL, cwd: process.cwd() });
+
 // ---------- HTTP helpers ----------
 
 function httpRequest(method, p, body) {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : null;
-    const opts = {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-    };
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
     if (data) opts.headers['Content-Length'] = Buffer.byteLength(data);
     const req = http.request(`${HUB_URL}${p}`, opts, (res) => {
       let out = '';
@@ -128,7 +154,6 @@ const hub = {
     if (aro) params.push(`aro=${encodeURIComponent(aro)}`);
     return httpRequest('GET', `/online?${params.join('&')}`);
   },
-  log: (limit) => httpRequest('GET', `/log?limit=${limit}`),
   guide: () => httpRequest('GET', '/guide'),
   readUnread: (agent) => httpRequest('GET', `/read-unread?agent=${encodeURIComponent(agent)}`),
 };
@@ -137,25 +162,17 @@ const hub = {
 
 const state = {
   agent: AGENT,
-  rooms: new Set(), // joined AROs
-  currentTarget: null, // aro name or agent name for /msg, null = show all / no target
-  history: { __all__: [] }, // per-room + __all__
-  sseReq: null,
-  unreadBuckets: new Map(), // room name -> count
-  recentTags: new Map(), // outbound tag -> target (for best-effort attribution)
+  rooms: new Set(),
+  currentTarget: null,
+  history: { __all__: [] },
+  unreadBuckets: new Map(),
+  recentTags: new Map(),
 };
-
-function bucketFor(target) {
-  if (!target) return '__all__';
-  return target;
-}
 
 function addMessage(bucket, entry) {
   if (!state.history[bucket]) state.history[bucket] = [];
   state.history[bucket].push(entry);
-  // Cap at 200 per bucket
   if (state.history[bucket].length > 200) state.history[bucket].shift();
-  // Also push into __all__ unless already there
   if (bucket !== '__all__') {
     state.history.__all__.push({ ...entry, _bucket: bucket });
     if (state.history.__all__.length > 500) state.history.__all__.shift();
@@ -166,15 +183,16 @@ function addMessage(bucket, entry) {
 
 const screen = blessed.screen({
   smartCSR: true,
-  title: `llmmsg-chat (${AGENT})`,
+  title: `llmmsg-chat v${VERSION} (${AGENT})`,
+  fullUnicode: true,
 });
 
 const sidebar = blessed.list({
   parent: screen,
   top: 0,
   left: 0,
-  width: 20,
-  height: '100%-3',
+  width: settings.sidebarWidth,
+  height: '100%-5',
   label: ' Rooms ',
   border: { type: 'line' },
   style: {
@@ -190,10 +208,10 @@ const sidebar = blessed.list({
 const chatPane = blessed.log({
   parent: screen,
   top: 0,
-  left: 20,
+  left: settings.sidebarWidth,
   right: 0,
-  height: '100%-3',
-  label: ` chat — ${AGENT} `,
+  height: '100%-5',
+  label: ` chat — ${AGENT} — llmmsg-chat v${VERSION} `,
   border: { type: 'line' },
   style: { border: { fg: 'grey' } },
   scrollable: true,
@@ -204,26 +222,41 @@ const chatPane = blessed.log({
 
 const statusBar = blessed.box({
   parent: screen,
-  bottom: 2,
+  bottom: 4,
   left: 0,
   right: 0,
   height: 1,
   style: { fg: 'yellow' },
-  content: ` SPEAKING IN: [none — select a room or use /msg]`,
+  content: ' SPEAKING IN: [none — pick a room (Tab), /msg, or menu (F1)]',
 });
 
+// Input MUST be height 3 minimum: top border + 1 content row + bottom border.
 const input = blessed.textbox({
+  parent: screen,
+  bottom: 1,
+  left: 0,
+  right: 0,
+  height: 3,
+  label: ' input (Enter=send, Esc=focus input, F1=menu, F9=quit) ',
+  border: { type: 'line' },
+  style: {
+    border: { fg: 'cyan' },
+    fg: 'white',
+    focus: { border: { fg: 'yellow' } },
+  },
+  inputOnFocus: false, // we drive readInput manually
+  keys: true,
+  mouse: true,
+});
+
+const menuBar = blessed.box({
   parent: screen,
   bottom: 0,
   left: 0,
   right: 0,
-  height: 2,
-  label: ' input (Enter to send, /help for commands) ',
-  border: { type: 'line' },
-  style: { border: { fg: 'cyan' } },
-  inputOnFocus: true,
-  keys: true,
-  mouse: true,
+  height: 1,
+  style: { bg: 'blue', fg: 'white' },
+  content: ' F1 help · F2 join · F3 leave · F4 who · F5 rooms · F6 msg · F7 invite · F9 quit · Tab sidebar ',
 });
 
 function log(text, color = 'white') {
@@ -232,13 +265,14 @@ function log(text, color = 'white') {
 }
 
 function systemLog(text) {
-  log(text, settings.colors.system);
+  log(text, 'grey');
+  logEvent('info', 'system_log', { text });
 }
 
 function updateStatus() {
   let target = state.currentTarget;
   if (!target) {
-    statusBar.setContent(` SPEAKING IN: [none — select a room or use /msg <agent>]`);
+    statusBar.setContent(' SPEAKING IN: [none — pick a room (Tab), /msg, or menu (F1)]');
   } else if (target.startsWith('aro:')) {
     statusBar.setContent(` SPEAKING IN: ${target} (blast radius: all online members)`);
   } else {
@@ -265,31 +299,60 @@ function renderView(bucket) {
   screen.render();
 }
 
-function printMessage(msg, showBucket) {
-  const { from, to, tag, body, _bucket } = msg;
+function printMessage(msg, showContext) {
+  const { from, to, body, _bucket } = msg;
   const ts = new Date().toTimeString().slice(0, 8);
-  const bucketTag = showBucket && _bucket ? `[${_bucket}] ` : '';
   let text = typeof body === 'object' ? (body.message || JSON.stringify(body)) : String(body);
 
-  let color = settings.colors.room;
-  if (from === state.agent) color = settings.colors.self;
-  else if (to === state.agent) color = settings.colors.dm;
+  // Context prefix: show what kind of message this is
+  let prefix = '';
+  if (showContext) {
+    if (_bucket && _bucket.startsWith('aro:')) prefix = `[${_bucket}] `;
+    else if (from === state.agent) prefix = `[→${to}] `;
+    else if (to === state.agent) prefix = `[DM] `;
+    else prefix = `[→${to}] `;
+  }
 
-  chatPane.log(
-    `{grey-fg}${ts}{/grey-fg} ${bucketTag}{${color}-fg}<${from}>{/${color}-fg} ${text}`
-  );
+  let color = 'white';
+  if (from === state.agent) color = 'cyan';
+  else if (to === state.agent) color = 'yellow';
+
+  chatPane.log(`{grey-fg}${ts}{/grey-fg} ${prefix}{${color}-fg}<${from}>{/${color}-fg} ${text}`);
 }
 
 // ---------- SSE ----------
 
+let sseReq = null;
+let sseReconnectTimer = null;
+let sseConnected = false;
+
+function scheduleReconnect(reason) {
+  if (sseReconnectTimer) return; // already scheduled
+  logEvent('warn', 'sse_schedule_reconnect', { reason });
+  sseReconnectTimer = setTimeout(() => {
+    sseReconnectTimer = null;
+    connectSSE();
+  }, 3000);
+}
+
 function connectSSE() {
+  if (sseReq) {
+    try { sseReq.destroy(); } catch {}
+    sseReq = null;
+  }
   const url = `${HUB_URL}/connect?agent=${encodeURIComponent(state.agent)}&cwd=${encodeURIComponent(process.cwd())}`;
+  logEvent('debug', 'sse_connect_start', { url });
+  sseConnected = false;
   const req = http.get(url, (res) => {
     if (res.statusCode !== 200) {
       systemLog(`SSE connect failed: HTTP ${res.statusCode}`);
+      logEvent('error', 'sse_connect_fail', { status: res.statusCode });
+      scheduleReconnect(`http_${res.statusCode}`);
       return;
     }
+    sseConnected = true;
     systemLog(`connected to hub as ${state.agent}`);
+    logEvent('info', 'sse_connected', { agent: state.agent });
     res.setEncoding('utf8');
     let buffer = '';
     res.on('data', (chunk) => {
@@ -303,87 +366,133 @@ function connectSSE() {
             try {
               const event = JSON.parse(line.slice(6));
               handleIncoming(event);
-            } catch {}
+            } catch (err) {
+              logEvent('error', 'sse_parse', { err: err.message, line });
+            }
           }
         }
       }
     });
     res.on('end', () => {
+      sseConnected = false;
       systemLog('SSE stream ended; reconnecting in 3s...');
-      setTimeout(connectSSE, 3000);
+      logEvent('warn', 'sse_end');
+      scheduleReconnect('end');
     });
     res.on('error', (err) => {
-      systemLog(`SSE error: ${err.message}`);
+      sseConnected = false;
+      systemLog(`SSE stream error: ${err.message}`);
+      logEvent('error', 'sse_stream_err', { err: err.message });
+      scheduleReconnect('stream_err');
     });
   });
+  sseReq = req;
   req.on('error', (err) => {
+    sseConnected = false;
     systemLog(`SSE connect error: ${err.message}; retrying in 3s...`);
-    setTimeout(connectSSE, 3000);
+    logEvent('error', 'sse_connect_err', { err: err.message });
+    scheduleReconnect('connect_err');
   });
-  state.sseReq = req;
 }
 
 function handleIncoming(event) {
-  // event: { id, from, to, tag, re, body }
-  // Best-effort room attribution:
-  //   - if re matches a recent outbound tag whose target was aro:X, treat as aro:X
-  //   - else if to === our agent, it's a DM (or an ARO fanout stored as per-member)
+  logEvent('debug', 'sse_event', { id: event.id, from: event.from, to: event.to, tag: event.tag });
+
+  // Bucket attribution: best-effort, based on reply-to-recent-tag.
+  // Without origin_aro on messages, we cannot reliably distinguish DMs from
+  // ARO fanout rows (both have recipient=me). So we ALWAYS render incoming
+  // messages in the current view regardless of bucket, to avoid losing visibility.
   let bucket = null;
   if (event.re && state.recentTags.has(event.re)) {
     bucket = state.recentTags.get(event.re);
-  } else if (event.to === state.agent) {
-    bucket = event.from; // treat as DM bucket keyed by sender
   }
   const entry = { ...event };
   if (bucket) entry._bucket = bucket;
   addMessage(bucket || '__all__', entry);
 
-  // Unread tracking if not currently viewing this bucket
-  const viewingAll = state.currentTarget === null;
+  // Also store in DM bucket keyed by sender for history
+  if (event.to === state.agent && event.from !== state.agent) {
+    if (!state.history[event.from]) state.history[event.from] = [];
+    state.history[event.from].push(entry);
+    if (state.history[event.from].length > 200) state.history[event.from].shift();
+  }
+
+  // Unread tracking: count DMs against the sender bucket when we're not viewing it
   const viewing = state.currentTarget;
-  const matchesView =
-    viewingAll ||
-    (bucket === viewing) ||
-    (viewing && viewing === event.from && event.to === state.agent);
-  if (!matchesView && bucket) {
-    state.unreadBuckets.set(bucket, (state.unreadBuckets.get(bucket) || 0) + 1);
+  if (event.to === state.agent && viewing !== event.from) {
+    state.unreadBuckets.set(event.from, (state.unreadBuckets.get(event.from) || 0) + 1);
     updateSidebar();
   }
 
-  if (matchesView) {
-    printMessage(entry, viewingAll);
-    screen.render();
-  }
+  // Always print incoming messages in the current chat pane. The user needs
+  // to see replies regardless of which room or DM is currently selected.
+  // Visual distinction: DMs to me = yellow, room messages = white, self = cyan.
+  printMessage(entry, true); // true = show bucket/from-to context
+  screen.render();
 
-  // DM bell
   if (settings.bell && event.to === state.agent && event.from !== state.agent) {
     process.stdout.write('\x07');
   }
 }
 
-// ---------- Commands ----------
+// ---------- Input handling (canonical blessed readInput loop) ----------
+
+let inputBusy = false;
+
+function promptInput() {
+  if (inputBusy) return;
+  inputBusy = true;
+  input.readInput(async (err, value) => {
+    inputBusy = false;
+    if (err) {
+      logEvent('error', 'input_err', { err: err.message });
+      setImmediate(promptInput);
+      return;
+    }
+    if (value === null || value === undefined) {
+      // Cancelled (Esc or similar) — just re-arm.
+      setImmediate(promptInput);
+      return;
+    }
+    logEvent('debug', 'input_submit', { value });
+    try {
+      await handleInput(value);
+    } catch (e) {
+      systemLog(`error: ${e.message}`);
+      logEvent('error', 'handle_input', { err: e.message });
+    }
+    input.clearValue();
+    screen.render();
+    setImmediate(promptInput);
+  });
+}
 
 async function handleInput(text) {
-  if (!text.trim()) return;
+  if (!text || !text.trim()) return;
   if (text.startsWith('/')) {
-    const [cmd, ...rest] = text.slice(1).split(' ');
-    const arg = rest.join(' ');
-    return handleCommand(cmd.toLowerCase(), arg, rest);
+    const parts = text.slice(1).split(' ');
+    const cmd = parts[0].toLowerCase();
+    const rest = parts.slice(1);
+    return handleCommand(cmd, rest.join(' '), rest);
   }
-  // Plain text: send to current target
   if (!state.currentTarget) {
-    systemLog('No target selected. Use /room <aro> or /msg <agent> <text>.');
+    systemLog('No target. Pick a room (Tab) or use /msg <agent> <text>.');
     return;
   }
-  const target = state.currentTarget;
+  await sendToTarget(state.currentTarget, text);
+}
+
+async function sendToTarget(target, text) {
   const msgBody = { message: text };
+  logEvent('debug', 'send_attempt', { to: target, text });
   const result = await hub.send(state.agent, target, msgBody, null);
   if (result.status !== 200) {
     systemLog(`send failed: ${result.body?.error || result.status}`);
+    logEvent('error', 'send_fail', { to: target, status: result.status, body: result.body });
     return;
   }
-  // Remember tag → target for reply attribution
   const tag = result.body?.tag;
+  logEvent('info', 'sent', { to: target, tag });
   if (tag && target.startsWith('aro:')) {
     state.recentTags.set(tag, target);
     if (state.recentTags.size > 200) {
@@ -391,17 +500,20 @@ async function handleInput(text) {
       state.recentTags.delete(first);
     }
   }
-  // Echo locally
   const entry = { from: state.agent, to: target, tag, body: msgBody };
   if (target.startsWith('aro:')) entry._bucket = target;
   addMessage(target, entry);
-  printMessage(entry, state.currentTarget === null);
+  printMessage(entry, true);
   screen.render();
 }
 
+// ---------- Commands ----------
+
 async function handleCommand(cmd, arg, rest) {
+  logEvent('debug', 'command', { cmd, arg });
   switch (cmd) {
     case 'help':
+      systemLog('F1 help · F2 join · F3 leave · F4 who · F5 rooms · F6 msg · F7 invite · F9 quit · Tab sidebar');
       systemLog('Commands: /join /leave /rooms /room /who /msg /invite /guide /settings /quit');
       break;
     case 'join': {
@@ -436,7 +548,7 @@ async function handleCommand(cmd, arg, rest) {
       systemLog(`joined: ${[...state.rooms].join(', ') || '(none)'}`);
       break;
     case 'room': {
-      if (!arg) return systemLog('Usage: /room <aro-name>  (or "all" to clear)');
+      if (!arg) return systemLog('Usage: /room <aro-name> or "all"');
       if (arg === 'all') {
         state.currentTarget = null;
         renderView('__all__');
@@ -472,7 +584,7 @@ async function handleCommand(cmd, arg, rest) {
       } else {
         const entry = { from: state.agent, to: to.toLowerCase(), tag: r.body?.tag, body: { message: text } };
         addMessage(to.toLowerCase(), entry);
-        printMessage(entry, state.currentTarget === null);
+        printMessage(entry, true);
         screen.render();
       }
       break;
@@ -497,93 +609,110 @@ async function handleCommand(cmd, arg, rest) {
       break;
     }
     case 'settings':
-      systemLog(`agent=${settings.agent} hub=${HUB_URL} bell=${settings.bell}`);
-      systemLog(`settings file: ${SETTINGS_PATH}`);
+      systemLog(`agent=${settings.agent} hub=${HUB_URL} bell=${settings.bell} version=${VERSION}`);
+      systemLog(`settings: ${SETTINGS_PATH}`);
+      systemLog(`events db: ${EVENTS_DB_PATH}`);
       break;
     case 'quit':
     case 'exit':
       await shutdown();
       break;
     default:
-      systemLog(`unknown command: /${cmd} (try /help)`);
+      systemLog(`unknown command: /${cmd} (F1 for help)`);
   }
 }
 
-// ---------- Lifecycle ----------
+// ---------- Prompts (popup for menu actions) ----------
 
-async function startup() {
-  systemLog(`llmmsg-chat v${VERSION} starting as ${AGENT} against ${HUB_URL}`);
-  try {
-    const reg = await hub.register(state.agent, process.cwd());
-    if (reg.status !== 200) {
-      systemLog(`register failed: ${reg.body?.error || reg.status}`);
-      return;
+function showPrompt(label, callback) {
+  const box = blessed.prompt({
+    parent: screen,
+    border: 'line',
+    height: 'shrink',
+    width: '50%',
+    top: 'center',
+    left: 'center',
+    label: ` ${label} `,
+    tags: true,
+    keys: true,
+    mouse: true,
+    style: { border: { fg: 'yellow' } },
+  });
+  box.input('', '', async (err, value) => {
+    box.destroy();
+    screen.render();
+    if (!err && value) {
+      try {
+        await callback(value);
+      } catch (e) {
+        systemLog(`prompt error: ${e.message}`);
+        logEvent('error', 'prompt_callback', { err: e.message });
+      }
     }
-    systemLog(`registered with hub`);
-  } catch (err) {
-    systemLog(`register error: ${err.message}`);
-    return;
-  }
-
-  // Fetch already-joined AROs
-  try {
-    const r = await hub.aroList(state.agent);
-    if (r.status === 200 && Array.isArray(r.body?.aros)) {
-      for (const aro of r.body.aros) state.rooms.add(`aro:${aro}`);
-      updateSidebar();
-    }
-  } catch {}
-
-  // Auto-join default rooms from settings
-  for (const room of settings.defaultRooms || []) {
-    const aro = room.replace(/^aro:/, '').toLowerCase();
-    await hub.aroJoin(aro, state.agent);
-    state.rooms.add(`aro:${aro}`);
-  }
-  updateSidebar();
-
-  // Replay missed messages
-  try {
-    const r = await hub.readUnread(state.agent);
-    if (r.status === 200 && Array.isArray(r.body)) {
-      for (const msg of r.body) handleIncoming(msg);
-      if (r.body.length) systemLog(`replayed ${r.body.length} unread messages`);
-    }
-  } catch {}
-
-  connectSSE();
-}
-
-async function shutdown() {
-  try {
-    await hub.unregister(state.agent);
-  } catch {}
-  screen.destroy();
-  process.exit(0);
+    input.focus();
+    setImmediate(promptInput);
+  });
 }
 
 // ---------- Key bindings ----------
 
-screen.key(['C-c', 'C-q'], async () => {
-  await shutdown();
+screen.key(['C-c', 'C-q'], () => { shutdown(); });
+screen.key(['f9'], () => {
+  logEvent('info', 'key_action', { key: 'f9', action: 'quit' });
+  shutdown();
 });
-
-input.key(['enter'], async () => {
-  const text = input.getValue();
-  input.clearValue();
-  input.focus();
+screen.key(['f1'], () => {
+  logEvent('info', 'key_action', { key: 'f1', action: 'show_help' });
+  systemLog('F1 help · F2 join · F3 leave · F4 who · F5 rooms · F6 msg · F7 invite · F9 quit · Tab sidebar · Esc focus input');
+});
+screen.key(['f2'], () => {
+  logEvent('info', 'key_action', { key: 'f2', action: 'prompt_join_aro' });
+  showPrompt('Join ARO (name)', (v) => handleCommand('join', v, v.split(' ')));
+});
+screen.key(['f3'], () => {
+  logEvent('info', 'key_action', { key: 'f3', action: 'prompt_leave_aro' });
+  showPrompt('Leave ARO (name)', (v) => handleCommand('leave', v, v.split(' ')));
+});
+screen.key(['f4'], async () => {
+  logEvent('info', 'key_action', { key: 'f4', action: 'run_who' });
+  await handleCommand('who', '', []);
+});
+screen.key(['f5'], async () => {
+  logEvent('info', 'key_action', { key: 'f5', action: 'list_rooms' });
+  await handleCommand('rooms', '', []);
+});
+screen.key(['f6'], () => {
+  logEvent('info', 'key_action', { key: 'f6', action: 'prompt_dm' });
+  showPrompt('DM (agent text...)', (v) => {
+    const parts = v.split(' ');
+    handleCommand('msg', v, parts);
+  });
+});
+screen.key(['f7'], () => {
+  logEvent('info', 'key_action', { key: 'f7', action: 'prompt_invite' });
+  showPrompt('Invite (agent aro)', (v) => {
+    const parts = v.split(' ');
+    handleCommand('invite', v, parts);
+  });
+});
+screen.key(['tab'], () => {
+  logEvent('info', 'key_action', { key: 'tab', action: 'focus_sidebar' });
+  sidebar.focus();
   screen.render();
-  try {
-    await handleInput(text);
-  } catch (err) {
-    systemLog(`error: ${err.message}`);
-  }
+});
+screen.key(['escape'], () => {
+  logEvent('info', 'key_action', { key: 'escape', action: 'focus_input_rearm' });
+  input.focus();
+  promptInput();
+  screen.render();
 });
 
 sidebar.on('select', (_item, index) => {
+  const rawItem = sidebar.getItem(index)?.content || '';
   if (index === 0) {
     state.currentTarget = null;
     renderView('__all__');
+    logEvent('info', 'sidebar_action', { index, item: rawItem, action: 'select_all' });
   } else {
     const roomName = [...state.rooms][index - 1];
     if (roomName) {
@@ -591,16 +720,78 @@ sidebar.on('select', (_item, index) => {
       state.unreadBuckets.delete(roomName);
       updateSidebar();
       renderView(roomName);
+      logEvent('info', 'sidebar_action', { index, item: rawItem, action: 'select_room', room: roomName });
     }
   }
   updateStatus();
   input.focus();
+  promptInput();
 });
 
+// ---------- Lifecycle ----------
+
+async function startup() {
+  systemLog(`llmmsg-chat v${VERSION} starting as ${AGENT} against ${HUB_URL}`);
+  systemLog(`event log: ${EVENTS_DB_PATH} (debug=${DEBUG})`);
+  try {
+    const reg = await hub.register(state.agent, process.cwd());
+    if (reg.status !== 200) {
+      systemLog(`register failed: ${reg.body?.error || reg.status}`);
+      logEvent('error', 'register_fail', { status: reg.status, body: reg.body });
+      return;
+    }
+    systemLog(`registered`);
+    logEvent('info', 'registered');
+  } catch (err) {
+    systemLog(`register error: ${err.message}`);
+    logEvent('error', 'register_err', { err: err.message });
+    return;
+  }
+
+  try {
+    const r = await hub.aroList(state.agent);
+    if (r.status === 200 && Array.isArray(r.body?.aros)) {
+      for (const aro of r.body.aros) state.rooms.add(`aro:${aro}`);
+      updateSidebar();
+      logEvent('info', 'loaded_aros', { aros: [...state.rooms] });
+    }
+  } catch {}
+
+  for (const room of settings.defaultRooms || []) {
+    const aro = room.replace(/^aro:/, '').toLowerCase();
+    await hub.aroJoin(aro, state.agent);
+    state.rooms.add(`aro:${aro}`);
+  }
+  updateSidebar();
+
+  try {
+    const r = await hub.readUnread(state.agent);
+    if (r.status === 200 && Array.isArray(r.body)) {
+      for (const msg of r.body) handleIncoming(msg);
+      if (r.body.length) systemLog(`replayed ${r.body.length} unread`);
+      logEvent('info', 'replayed_unread', { count: r.body.length });
+    }
+  } catch {}
+
+  connectSSE();
+}
+
+async function shutdown() {
+  logEvent('info', 'shutdown');
+  try {
+    await hub.unregister(state.agent);
+  } catch {}
+  try { eventsDb.close(); } catch {}
+  screen.destroy();
+  process.exit(0);
+}
+
+// Init UI
 input.focus();
 updateStatus();
 updateSidebar();
 screen.render();
+promptInput();
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
