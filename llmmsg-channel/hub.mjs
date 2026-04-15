@@ -7,16 +7,48 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '2.7';
+const VERSION = '2.8';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
-const SITE_NAME = process.env.LLMMSG_SITE || '';
 const REMOTE_HUBS_JSON = process.env.LLMMSG_REMOTE_HUBS || ''; // JSON: {"lezama":"http://10.78.42.168:9701"}
 const INBOUND_SECRET = process.env.LLMMSG_INBOUND_SECRET || ''; // shared secret for /inbound auth
-const SITE_SUFFIX = process.env.LLMMSG_SITE_SUFFIX || ''; // required agent name suffix (e.g. -l)
-const ARO_SEGMENT = parseInt(process.env.LLMMSG_ARO_SEGMENT || '0'); // which name segment is the project (0=first, 1=second)
 const BRIDGE_REGISTRY_PATH = new URL('../codex-llmmsg-app/registrations.json', import.meta.url);
+
+// Host-scoped site config at /etc/llmmsg/site.conf (override via LLMMSG_SITE_CONF).
+// MUST exist. Hub hard-errors on startup if missing. Provides SITE_SUFFIX,
+// LLMMSG_SITE, LLMMSG_ARO_SEGMENT. Env vars still override file values for
+// emergency/testing use.
+const SITE_CONF_PATH = process.env.LLMMSG_SITE_CONF || '/etc/llmmsg/site.conf';
+function loadSiteConf() {
+  if (!existsSync(SITE_CONF_PATH)) {
+    console.error(`FATAL: missing host config: ${SITE_CONF_PATH}`);
+    console.error(`fix:   sudo install -m 0644 -o root -g root /opt/llmmsg/config-templates/site.conf.<hostname> ${SITE_CONF_PATH}`);
+    process.exit(1);
+  }
+  const text = readFileSync(SITE_CONF_PATH, 'utf8');
+  const out = { SITE_SUFFIX: '', LLMMSG_SITE: '', LLMMSG_ARO_SEGMENT: '0' };
+  for (const rawLine of text.split('\n')) {
+    const noComment = rawLine.replace(/#.*$/, '').trim();
+    if (!noComment) continue;
+    const eq = noComment.indexOf('=');
+    if (eq < 0) continue;
+    const key = noComment.slice(0, eq).trim();
+    let val = noComment.slice(eq + 1).trim();
+    // Strip surrounding quotes
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (key in out) out[key] = val;
+  }
+  return out;
+}
+const siteConf = loadSiteConf();
+const SITE_NAME = process.env.LLMMSG_SITE || siteConf.LLMMSG_SITE || '';
+const SITE_SUFFIX = process.env.LLMMSG_SITE_SUFFIX !== undefined
+  ? process.env.LLMMSG_SITE_SUFFIX
+  : siteConf.SITE_SUFFIX; // empty string is valid
+const ARO_SEGMENT = parseInt(process.env.LLMMSG_ARO_SEGMENT || siteConf.LLMMSG_ARO_SEGMENT || '0');
 
 if (!existsSync(DB_PATH)) {
   console.error(`DB not found: ${DB_PATH}`);

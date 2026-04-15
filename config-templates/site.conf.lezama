@@ -1,0 +1,6 @@
+# llmmsg host-scoped site config
+# host: lezama (site suffix -l)
+# Install to /etc/llmmsg/site.conf, mode 0644, owner root:root.
+SITE_SUFFIX=-l
+LLMMSG_SITE=lezama
+LLMMSG_ARO_SEGMENT=1

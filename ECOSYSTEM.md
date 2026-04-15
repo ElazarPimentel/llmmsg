@@ -1,6 +1,6 @@
 # llmmsg Ecosystem
 
-Last-verified: 2026-04-13 @ 6f1e6f3
+Last-verified: 2026-04-15 @ e6e7afc
 
 The llmmsg ecosystem is the set of tightly-coupled components that enable inter-agent messaging between Claude Code and OpenAI Codex sessions across one or more hosts. This document is the canonical map of the system. After a `/clear`, any agent working on any part of the ecosystem should read this file first.
 
@@ -126,11 +126,12 @@ remote hub /inbound ── POST over SSH tunnel ──► remote SQLite
 | `LLMMSG_HUB_BIND` | hub | Bind address (default `127.0.0.1`, `0.0.0.0` for multi-site) |
 | `LLMMSG_HUB_HOST` | channel | Hub host for channel.mjs to connect to (default `127.0.0.1`) |
 | `LLMMSG_HUB_URL` | bridge | Full URL of hub (default `http://127.0.0.1:9701`) |
-| `LLMMSG_SITE` | hub | Site identity (e.g. `whey`, `lezama`) |
-| `LLMMSG_REMOTE_HUBS` | hub | JSON map `{"lezama":"http://127.0.0.1:9702"}` for forwarding |
-| `LLMMSG_INBOUND_SECRET` | hub | Shared Bearer token for `/inbound` auth (both sites must match) |
-| `LLMMSG_SITE_SUFFIX` | hub | Required agent name suffix (e.g. `-l` on lezama) |
-| `LLMMSG_ARO_SEGMENT` | hub | Which name segment is the project (0=first, 1=second). Default 0. |
+| `LLMMSG_SITE` | hub | Site identity (e.g. `whey`, `lezama`). **Source: `/etc/llmmsg/site.conf`.** Env var overrides file. |
+| `LLMMSG_SITE_SUFFIX` | hub, launchers | Required agent name suffix (e.g. `-l` on lezama; empty on whey). **Source: `/etc/llmmsg/site.conf`.** Env var overrides file for testing. |
+| `LLMMSG_ARO_SEGMENT` | hub | Which name segment is the project (0=first, 1=second). **Source: `/etc/llmmsg/site.conf`.** Env var overrides file. |
+| `LLMMSG_SITE_CONF` | hub, launchers | Override path for `/etc/llmmsg/site.conf` (testing only). |
+| `LLMMSG_REMOTE_HUBS` | hub | JSON map `{"lezama":"http://127.0.0.1:9702"}` for forwarding (env only, secret-adjacent) |
+| `LLMMSG_INBOUND_SECRET` | hub | Shared Bearer token for `/inbound` auth (env only, secret) |
 | `LLMMSG_AGENT` | channel | Agent name for this session (set by launcher) |
 | `LLMMSG_CWD` | channel | Working directory of the agent (set by launcher) |
 | `CODEX_APP_SERVER_URL` | bridge | Codex app-server URL (default `ws://127.0.0.1:8788`) |
@@ -142,6 +143,7 @@ remote hub /inbound ── POST over SSH tunnel ──► remote SQLite
 
 | File | Owner | Purpose |
 |---|---|---|
+| `/etc/llmmsg/site.conf` | host config | MANDATORY host-scoped config: SITE_SUFFIX, LLMMSG_SITE, LLMMSG_ARO_SEGMENT. Owner root:root, mode 0644. Hub and launchers hard-error if missing. Templates in `config-templates/site.conf.whey` and `config-templates/site.conf.lezama`. |
 | `/opt/llmmsg/db/llmmsg.sqlite` | hub | Messages (with origin_tag), cursors (read_id only), roster, aros, config, outbox |
 | `/opt/llmmsg/codex-llmmsg-app/registrations.json` | bridge | Agent → (threadId, cwd, suspended) binding. **Not tracked in git.** |
 | `/opt/llmmsg/codex-llmmsg-app/bridge-state.sqlite` | bridge | `delivery_cursor` tracking last-delivered id per Codex agent. Separate from main DB for bridge write-isolation. |
@@ -209,6 +211,8 @@ Rules the ecosystem enforces. Future `llmmsg-doctor` will validate these.
 10. **Launcher mirror sync:** adding a new ecosystem member requires updating the `/opt/llmmsg/launchers/` symlink mirror in the same change.
 11. **Site suffix enforcement:** if `LLMMSG_SITE_SUFFIX` is set, hub rejects registrations whose names don't end with it.
 12. **Inbound auth:** when `LLMMSG_INBOUND_SECRET` is configured, `/inbound` requires matching Bearer token; both sites must use the same value. Binding the hub to `0.0.0.0` without the secret is allowed but logs a warning. Multi-site deployments must set the secret on all participating hubs.
+13. **Host config mandatory:** `/etc/llmmsg/site.conf` MUST exist on every host. Hub and launchers hard-error on startup if missing. Contains `SITE_SUFFIX` (may be empty — explicit opt-in to "no suffix"), `LLMMSG_SITE`, `LLMMSG_ARO_SEGMENT`. Secrets (`LLMMSG_INBOUND_SECRET`) stay in env, never in this file. Override for tests via `LLMMSG_SITE_CONF=/path/to/alt.conf`.
+14. **Agent name resolution priority:** launchers resolve agent label in strict order: explicit `--agent` / positional LABEL > `.agent-name-{cc|ca}` file > `LLMMSG_AGENT` env > cwd basename. Ambient env var must NOT silently override a per-folder file. Final effective label is validated against `SITE_SUFFIX`; mismatch hard-errors with a one-line fix command before any bridge registration write.
 
 ---
 
@@ -216,12 +220,17 @@ Rules the ecosystem enforces. Future `llmmsg-doctor` will validate these.
 
 When writing a new launcher/wrapper that participates in llmmsg:
 
-1. Set `LLMMSG_AGENT` (env var, derived from `.agent-name` or cwd basename).
-2. Set `LLMMSG_CWD` (env var, the actual working directory).
-3. For CC wrappers: pass `--dangerously-load-development-channels server:llmmsg-channel` to `claude`.
-4. Add the marker (`# llmmsg-ecosystem`) in the top 10 lines of the file.
-5. Declare `VERSION="x.y"` variable and print `echo "<name> v$VERSION"` on every run.
-6. Handle the LLM-specific agent-name file: CC wrappers read `.agent-name-cc` (with legacy `.agent-name` fallback); Codex wrappers read `.agent-name-ca` (with legacy fallback). Create the appropriate file from cwd basename if missing. Both files may coexist in the same folder for dual-session folders.
+0. **Capture `ORIGINAL_CWD="$(pwd)"`** at the very top, BEFORE any `--worktree` chdir. All `.agent-name-*` file I/O must use `ORIGINAL_CWD`, not `$(pwd)` at the moment of the read/write.
+1. **Source the shared helper and load site config:**
+   ```bash
+   source /opt/llmmsg/scripts/lib/resolve-agent-name.sh
+   load_site_conf   # hard-errors if /etc/llmmsg/site.conf is missing
+   ```
+2. **Resolve the agent label** via `resolve_agent_label cc` (for CC wrappers) or `resolve_agent_label ca` (for Codex wrappers). Pre-seed `$LABEL` with any explicit `--agent` / positional value before calling; the helper honors CLI > file > env > basename priority and validates against `SITE_SUFFIX`. On validation failure the helper exits with a one-line fix command.
+3. `export LLMMSG_AGENT="$LABEL"` and `export LLMMSG_CWD="$ORIGINAL_CWD"`.
+4. For CC wrappers: pass `--dangerously-load-development-channels server:llmmsg-channel` to `claude`.
+5. Add the marker (`# llmmsg-ecosystem`) in the top 10 lines of the file.
+6. Declare `VERSION="x.y"` variable and print `echo "<name> v$VERSION"` on every run.
 7. `exec` the underlying tool at the end of the script for clean signal propagation.
 8. Check hard dependencies before launch with actionable errors (e.g. service readiness checks).
 9. Invoke `title.sh` for the terminal title (convention, not hard rule).
@@ -230,8 +239,9 @@ When writing a new launcher/wrapper that participates in llmmsg:
 12. Prefer non-interactive / resumable behavior where possible.
 13. Don't mutate global `~/.codex` or `~/.claude` config from wrappers.
 14. Preserve user cwd semantics: pass `-C`/`--cwd` through, never silently chdir.
-15. For Codex remote wrappers: register/rebind the bridge with exact `threadId` and `cwd`.
+15. For Codex remote wrappers: register/rebind the bridge with exact `threadId` and `cwd` — but ONLY AFTER the launcher has validated the agent label against `SITE_SUFFIX`. Never write `registrations.json` for an invalid name.
 16. Update `/opt/llmmsg/launchers/` symlink mirror in the same change.
+17. **One-time host setup** (before any launcher runs on a new host): `sudo install -m 0644 -o root -g root /opt/llmmsg/config-templates/site.conf.<hostname> /etc/llmmsg/site.conf`.
 
 ---
 

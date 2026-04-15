@@ -2,7 +2,7 @@
 # setup.sh - Bootstrap llmmsg on a fresh machine
 # Prerequisites: node >= 18, npm, sqlite3, systemd
 # Run as the user who will own the services (not root), from the repo root.
-VERSION="1.0"
+VERSION="1.1"
 echo "setup.sh v$VERSION"
 
 set -euo pipefail
@@ -33,6 +33,28 @@ if [[ "$NODE_MAJOR" -lt 18 ]]; then
     exit 1
 fi
 echo "node $(node -v), npm $(npm -v), sqlite3 $(sqlite3 --version | cut -d' ' -f1)"
+
+# --- 1b. Check /etc/llmmsg/site.conf (MANDATORY for hub and launchers) ---
+echo ""
+echo "--- Checking host config /etc/llmmsg/site.conf ---"
+if [[ ! -f /etc/llmmsg/site.conf ]]; then
+    echo "ERROR: /etc/llmmsg/site.conf is required but missing." >&2
+    echo "Install a template for this host, e.g.:" >&2
+    HOSTNAME_LOWER="$(hostname | tr '[:upper:]' '[:lower:]')"
+    TEMPLATE="$REPO_DIR/config-templates/site.conf.$HOSTNAME_LOWER"
+    if [[ -f "$TEMPLATE" ]]; then
+        echo "  sudo install -m 0644 -o root -g root $TEMPLATE /etc/llmmsg/site.conf" >&2
+    else
+        echo "  sudo mkdir -p /etc/llmmsg" >&2
+        echo "  sudo tee /etc/llmmsg/site.conf <<EOF" >&2
+        echo "  SITE_SUFFIX=-$HOSTNAME_LOWER   # or '' if no suffix" >&2
+        echo "  LLMMSG_SITE=$HOSTNAME_LOWER" >&2
+        echo "  LLMMSG_ARO_SEGMENT=0" >&2
+        echo "  EOF" >&2
+    fi
+    exit 1
+fi
+echo "found /etc/llmmsg/site.conf"
 
 # --- 2. Install npm dependencies ---
 echo ""

@@ -1,0 +1,6 @@
+# llmmsg host-scoped site config
+# host: whey (no site suffix)
+# Install to /etc/llmmsg/site.conf, mode 0644, owner root:root.
+SITE_SUFFIX=
+LLMMSG_SITE=whey
+LLMMSG_ARO_SEGMENT=0

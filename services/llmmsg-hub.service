@@ -8,12 +8,15 @@ User=rob
 Environment=HOME=/home/rob
 Environment=LLMMSG_DB=/opt/llmmsg/db/llmmsg.sqlite
 Environment=LLMMSG_HUB_PORT=9701
-# Multi-site: uncomment and configure for cross-machine messaging
+# Site identity (SITE_SUFFIX, LLMMSG_SITE, LLMMSG_ARO_SEGMENT) comes from
+# /etc/llmmsg/site.conf. Hub hard-errors on startup if the file is missing.
+# Install before starting the service:
+#   sudo install -m 0644 -o root -g root \
+#       /opt/llmmsg/config-templates/site.conf.<hostname> /etc/llmmsg/site.conf
+# Multi-site secrets/peers stay in env (not in site.conf):
 #Environment=LLMMSG_HUB_BIND=0.0.0.0
-#Environment=LLMMSG_SITE=whey
 #Environment="LLMMSG_REMOTE_HUBS={\"lezama\":\"http://10.78.42.168:9701\"}"
 #Environment=LLMMSG_INBOUND_SECRET=your-shared-secret-here
-#Environment=LLMMSG_SITE_SUFFIX=-w
 ExecStart=/usr/bin/node /opt/llmmsg/llmmsg-channel/hub.mjs
 Restart=on-failure
 RestartSec=3
