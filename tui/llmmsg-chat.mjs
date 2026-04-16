@@ -216,7 +216,6 @@ const input = blessed.box({
   style: {
     border: { fg: 'cyan' },
     fg: 'white',
-    focus: { border: { fg: 'yellow' } },
   },
   input: true,
   mouse: true,
