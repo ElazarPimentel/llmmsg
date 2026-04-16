@@ -8,16 +8,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import blessed from 'blessed';
-import Database from 'better-sqlite3';
 
-const VERSION = '0.2.5';
+const VERSION = '0.2.6';
 
 // ---------- Settings ----------
 
 const CONFIG_DIR = path.join(os.homedir(), '.config', 'llmmsg-chat');
 const SETTINGS_PATH = path.join(CONFIG_DIR, 'settings.json');
-const EVENTS_DB_PATH = path.join(CONFIG_DIR, 'llmmsg-chat.sqlite');
-const DEBUG = true; // hardcoded debug logger; toggle later if needed
 const SENDER_COLORS = ['cyan', 'green', 'yellow', 'magenta', 'blue', 'red'];
 
 fs.mkdirSync(CONFIG_DIR, { recursive: true });
@@ -54,38 +51,6 @@ function persistJoinedRooms() {
     .filter(Boolean)
     .sort();
   saveSettings(settings);
-  logEvent('info', 'settings_saved', { joinedRooms: settings.joinedRooms });
-}
-
-// ---------- Event logger ----------
-
-const eventsDb = new Database(EVENTS_DB_PATH);
-eventsDb.pragma('journal_mode = WAL');
-eventsDb.exec(`
-  CREATE TABLE IF NOT EXISTS events (
-    id    INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts    TEXT NOT NULL DEFAULT (strftime('%s','now')),
-    level TEXT NOT NULL,
-    event TEXT NOT NULL,
-    data  TEXT
-  );
-  CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
-`);
-// Retention cap: keep last 10k events max. Pruned once on startup.
-eventsDb.exec(`
-  DELETE FROM events WHERE id <= (
-    SELECT COALESCE(MAX(id), 0) - 10000 FROM events
-  )
-`);
-const stmtLogEvent = eventsDb.prepare(
-  `INSERT INTO events (level, event, data) VALUES (?, ?, ?)`
-);
-
-function logEvent(level, event, data = null) {
-  if (!DEBUG && level === 'debug') return;
-  try {
-    stmtLogEvent.run(level, event, data ? JSON.stringify(data) : null);
-  } catch {}
 }
 
 // ---------- CLI args ----------
@@ -108,15 +73,12 @@ for (let i = 0; i < args.length; i++) {
     console.log('Usage: llmmsg-chat [--agent NAME] [--host HOST] [--port PORT]');
     console.log('');
     console.log('Once running:');
-    console.log('  F1   Help / menu       F9  Quit');
-    console.log('  F2   /join <aro>       F3  /leave <aro>');
-    console.log('  F4   /who              F5  /rooms');
-    console.log('  F6   /msg <agent>      F7  /invite <agent> <aro>');
+    console.log('  Ctrl-C / Ctrl-Q        Quit');
     console.log('  Tab / Shift-Tab        switch rooms in sidebar');
     console.log('  Esc                    focus input');
+    console.log('  /help                  show commands');
     console.log('');
     console.log(`Settings: ${SETTINGS_PATH}`);
-    console.log(`Event log: ${EVENTS_DB_PATH}`);
     process.exit(0);
   }
 }
@@ -128,8 +90,6 @@ if (cliPort) settings.hubPort = cliPort;
 
 const AGENT = settings.agent.toLowerCase();
 const HUB_URL = `http://${settings.hubHost}:${settings.hubPort}`;
-
-logEvent('info', 'startup', { version: VERSION, agent: AGENT, hub: HUB_URL, cwd: process.cwd() });
 
 // ---------- HTTP helpers ----------
 
@@ -206,7 +166,7 @@ const sidebar = blessed.list({
   top: 0,
   left: 0,
   width: settings.sidebarWidth,
-  height: '100%-7',
+  height: '100%-6',
   label: ' Rooms ',
   border: { type: 'line' },
   style: {
@@ -224,7 +184,7 @@ const chatPane = blessed.log({
   top: 0,
   left: settings.sidebarWidth,
   right: 0,
-  height: '100%-7',
+  height: '100%-6',
   label: ` chat — ${AGENT} — llmmsg-chat v${VERSION} `,
   border: { type: 'line' },
   style: { border: { fg: 'grey' } },
@@ -236,41 +196,31 @@ const chatPane = blessed.log({
 
 const statusBar = blessed.box({
   parent: screen,
-  bottom: 6,
+  bottom: 5,
   left: 0,
   right: 0,
   height: 1,
   style: { fg: 'yellow' },
-  content: ' SPEAKING IN: [none — pick a room (Tab), /msg, or menu (F1)]',
+  content: ' SPEAKING IN: [none — pick a room (Tab), /msg, or /join]',
 });
 
 // Input height 5: top border + 3 content rows + bottom border.
 const input = blessed.textbox({
   parent: screen,
-  bottom: 1,
+  bottom: 0,
   left: 0,
   right: 0,
   height: 5,
-  label: ' input (Enter=send, Esc=focus input, F1=menu, F9=quit) ',
+  label: ' input (Enter=send, Ctrl-C/Ctrl-Q=quit, Tab=rooms) ',
   border: { type: 'line' },
   style: {
     border: { fg: 'cyan' },
     fg: 'white',
     focus: { border: { fg: 'yellow' } },
   },
-  inputOnFocus: false, // we drive readInput manually
+  inputOnFocus: false, // we drive input from screen.program keypress
   keys: true,
   mouse: true,
-});
-
-const menuBar = blessed.box({
-  parent: screen,
-  bottom: 0,
-  left: 0,
-  right: 0,
-  height: 1,
-  style: { bg: 'blue', fg: 'white' },
-  content: ' F1 help · F2 join · F3 leave · F4 who · F5 rooms · F6 msg · F7 invite · F9 quit · Tab sidebar ',
 });
 
 function log(text, color = 'white') {
@@ -280,13 +230,12 @@ function log(text, color = 'white') {
 
 function systemLog(text) {
   log(text, 'grey');
-  logEvent('info', 'system_log', { text });
 }
 
 function updateStatus() {
   let target = state.currentTarget;
   if (!target) {
-    statusBar.setContent(' SPEAKING IN: [none — pick a room (Tab), /msg, or menu (F1)]');
+    statusBar.setContent(' SPEAKING IN: [none — pick a room (Tab), /msg, or /join]');
   } else if (target.startsWith('aro:')) {
     statusBar.setContent(` SPEAKING IN: ${target} (blast radius: all online members)`);
   } else {
@@ -354,7 +303,6 @@ let sseConnected = false;
 
 function scheduleReconnect(reason) {
   if (sseReconnectTimer) return; // already scheduled
-  logEvent('warn', 'sse_schedule_reconnect', { reason });
   sseReconnectTimer = setTimeout(() => {
     sseReconnectTimer = null;
     connectSSE();
@@ -367,18 +315,15 @@ function connectSSE() {
     sseReq = null;
   }
   const url = `${HUB_URL}/connect?agent=${encodeURIComponent(state.agent)}&cwd=${encodeURIComponent(process.cwd())}`;
-  logEvent('debug', 'sse_connect_start', { url });
   sseConnected = false;
   const req = http.get(url, (res) => {
     if (res.statusCode !== 200) {
       systemLog(`SSE connect failed: HTTP ${res.statusCode}`);
-      logEvent('error', 'sse_connect_fail', { status: res.statusCode });
       scheduleReconnect(`http_${res.statusCode}`);
       return;
     }
     sseConnected = true;
     systemLog(`connected to hub as ${state.agent}`);
-    logEvent('info', 'sse_connected', { agent: state.agent });
     res.setEncoding('utf8');
     let buffer = '';
     res.on('data', (chunk) => {
@@ -393,7 +338,6 @@ function connectSSE() {
               const event = JSON.parse(line.slice(6));
               handleIncoming(event);
             } catch (err) {
-              logEvent('error', 'sse_parse', { err: err.message, line });
             }
           }
         }
@@ -402,13 +346,11 @@ function connectSSE() {
     res.on('end', () => {
       sseConnected = false;
       systemLog('SSE stream ended; reconnecting in 3s...');
-      logEvent('warn', 'sse_end');
       scheduleReconnect('end');
     });
     res.on('error', (err) => {
       sseConnected = false;
       systemLog(`SSE stream error: ${err.message}`);
-      logEvent('error', 'sse_stream_err', { err: err.message });
       scheduleReconnect('stream_err');
     });
   });
@@ -416,13 +358,11 @@ function connectSSE() {
   req.on('error', (err) => {
     sseConnected = false;
     systemLog(`SSE connect error: ${err.message}; retrying in 3s...`);
-    logEvent('error', 'sse_connect_err', { err: err.message });
     scheduleReconnect('connect_err');
   });
 }
 
 function handleIncoming(event) {
-  logEvent('debug', 'sse_event', { id: event.id, from: event.from, to: event.to, tag: event.tag, origin_aro: event.origin_aro || null });
 
   // Bucket attribution: origin_aro is authoritative for ARO fanout rows.
   // Fallback to reply-to-recent-tag only for older messages sent before origin_aro.
@@ -460,36 +400,72 @@ function handleIncoming(event) {
   }
 }
 
-// ---------- Input handling (canonical blessed readInput loop) ----------
+// ---------- Input handling ----------
 
-let inputBusy = false;
+let inputBuffer = '';
+let inputCursor = 0;
 
-function promptInput() {
-  if (inputBusy) return;
-  inputBusy = true;
-  input.readInput(async (err, value) => {
-    inputBusy = false;
-    if (err) {
-      logEvent('error', 'input_err', { err: err.message });
-      setImmediate(promptInput);
-      return;
-    }
-    if (value === null || value === undefined) {
-      // Cancelled (Esc or similar) — just re-arm.
-      setImmediate(promptInput);
-      return;
-    }
-    logEvent('debug', 'input_submit', { value });
-    try {
-      await handleInput(value);
-    } catch (e) {
-      systemLog(`error: ${e.message}`);
-      logEvent('error', 'handle_input', { err: e.message });
-    }
-    input.clearValue();
-    screen.render();
-    setImmediate(promptInput);
-  });
+function escapeTags(text) {
+  return String(text).replace(/[{}]/g, (ch) => (ch === '{' ? '{open}' : '{close}'));
+}
+
+function renderInput() {
+  const before = escapeTags(inputBuffer.slice(0, inputCursor));
+  const current = inputCursor < inputBuffer.length ? escapeTags(inputBuffer[inputCursor]) : ' ';
+  const after = escapeTags(inputBuffer.slice(inputCursor + 1));
+  input.setContent(`${before}{inverse}${current}{/inverse}${after}`);
+  input.value = inputBuffer;
+  screen.render();
+}
+
+function insertInput(text) {
+  inputBuffer = inputBuffer.slice(0, inputCursor) + text + inputBuffer.slice(inputCursor);
+  inputCursor += text.length;
+  renderInput();
+}
+
+function deleteBack() {
+  if (inputCursor <= 0) return;
+  inputBuffer = inputBuffer.slice(0, inputCursor - 1) + inputBuffer.slice(inputCursor);
+  inputCursor -= 1;
+  renderInput();
+}
+
+function deleteForward() {
+  if (inputCursor >= inputBuffer.length) return;
+  inputBuffer = inputBuffer.slice(0, inputCursor) + inputBuffer.slice(inputCursor + 1);
+  renderInput();
+}
+
+function wordLeft() {
+  while (inputCursor > 0 && /\s/.test(inputBuffer[inputCursor - 1])) inputCursor--;
+  while (inputCursor > 0 && !/\s/.test(inputBuffer[inputCursor - 1])) inputCursor--;
+  renderInput();
+}
+
+function wordRight() {
+  while (inputCursor < inputBuffer.length && !/\s/.test(inputBuffer[inputCursor])) inputCursor++;
+  while (inputCursor < inputBuffer.length && /\s/.test(inputBuffer[inputCursor])) inputCursor++;
+  renderInput();
+}
+
+function deleteWordBack() {
+  const end = inputCursor;
+  wordLeft();
+  inputBuffer = inputBuffer.slice(0, inputCursor) + inputBuffer.slice(end);
+  renderInput();
+}
+
+async function submitInput() {
+  const value = inputBuffer;
+  inputBuffer = '';
+  inputCursor = 0;
+  renderInput();
+  try {
+    await handleInput(value);
+  } catch (e) {
+    systemLog(`error: ${e.message}`);
+  }
 }
 
 async function handleInput(text) {
@@ -509,15 +485,12 @@ async function handleInput(text) {
 
 async function sendToTarget(target, text) {
   const msgBody = { message: text };
-  logEvent('debug', 'send_attempt', { to: target, text });
   const result = await hub.send(state.agent, target, msgBody, null);
   if (result.status !== 200) {
     systemLog(`send failed: ${result.body?.error || result.status}`);
-    logEvent('error', 'send_fail', { to: target, status: result.status, body: result.body });
     return;
   }
   const tag = result.body?.tag;
-  logEvent('info', 'sent', { to: target, tag });
   if (tag && target.startsWith('aro:')) {
     state.recentTags.set(tag, target);
     if (state.recentTags.size > 200) {
@@ -535,10 +508,9 @@ async function sendToTarget(target, text) {
 // ---------- Commands ----------
 
 async function handleCommand(cmd, arg, rest) {
-  logEvent('debug', 'command', { cmd, arg });
   switch (cmd) {
     case 'help':
-      systemLog('F1 help · F2 join · F3 leave · F4 who · F5 rooms · F6 msg · F7 invite · F9 quit · Tab sidebar');
+      systemLog('Ctrl-C/Ctrl-Q quit · Tab rooms · Esc input · Ctrl-Left/Right word jump · Home/End line start/end');
       systemLog('Commands: /join /leave /rooms /room /who /msg /invite /guide /settings /quit');
       break;
     case 'join': {
@@ -643,124 +615,44 @@ async function handleCommand(cmd, arg, rest) {
     case 'settings':
       systemLog(`agent=${settings.agent} hub=${HUB_URL} bell=${settings.bell} version=${VERSION}`);
       systemLog(`settings: ${SETTINGS_PATH}`);
-      systemLog(`events db: ${EVENTS_DB_PATH}`);
       break;
     case 'quit':
     case 'exit':
       await shutdown();
       break;
     default:
-      systemLog(`unknown command: /${cmd} (F1 for help)`);
+      systemLog(`unknown command: /${cmd} (/help for commands)`);
   }
-}
-
-// ---------- Prompts (popup for menu actions) ----------
-
-function showPrompt(label, callback) {
-  const box = blessed.prompt({
-    parent: screen,
-    border: 'line',
-    height: 'shrink',
-    width: '50%',
-    top: 'center',
-    left: 'center',
-    label: ` ${label} `,
-    tags: true,
-    keys: true,
-    mouse: true,
-    style: { border: { fg: 'yellow' } },
-  });
-  box.input('', '', async (err, value) => {
-    box.destroy();
-    screen.render();
-    if (!err && value) {
-      try {
-        await callback(value);
-      } catch (e) {
-        systemLog(`prompt error: ${e.message}`);
-        logEvent('error', 'prompt_callback', { err: e.message });
-      }
-    }
-    input.focus();
-    setImmediate(promptInput);
-  });
 }
 
 // ---------- Key bindings ----------
 
-const keyActions = {
-  f1: () => {
-    logEvent('info', 'key_action', { key: 'f1', action: 'show_help' });
-    systemLog('F1 help · F2 join · F3 leave · F4 who · F5 rooms · F6 msg · F7 invite · F9 quit · Tab sidebar · Esc focus input');
-  },
-  f2: () => {
-    logEvent('info', 'key_action', { key: 'f2', action: 'prompt_join_aro' });
-    showPrompt('Join ARO (name)', (v) => handleCommand('join', v, v.split(' ')));
-  },
-  f3: () => {
-    logEvent('info', 'key_action', { key: 'f3', action: 'prompt_leave_aro' });
-    showPrompt('Leave ARO (name)', (v) => handleCommand('leave', v, v.split(' ')));
-  },
-  f4: async () => {
-    logEvent('info', 'key_action', { key: 'f4', action: 'run_who' });
-    await handleCommand('who', '', []);
-  },
-  f5: async () => {
-    logEvent('info', 'key_action', { key: 'f5', action: 'list_rooms' });
-    await handleCommand('rooms', '', []);
-  },
-  f6: () => {
-    logEvent('info', 'key_action', { key: 'f6', action: 'prompt_dm' });
-    showPrompt('DM (agent text...)', (v) => {
-      const parts = v.split(' ');
-      handleCommand('msg', v, parts);
-    });
-  },
-  f7: () => {
-    logEvent('info', 'key_action', { key: 'f7', action: 'prompt_invite' });
-    showPrompt('Invite (agent aro)', (v) => {
-      const parts = v.split(' ');
-      handleCommand('invite', v, parts);
-    });
-  },
-  f9: () => {
-    logEvent('info', 'key_action', { key: 'f9', action: 'quit' });
-    shutdown();
-  },
-  tab: () => {
-    logEvent('info', 'key_action', { key: 'tab', action: 'focus_sidebar' });
-    sidebar.focus();
-    screen.render();
-  },
-  escape: () => {
-    logEvent('info', 'key_action', { key: 'escape', action: 'focus_input_rearm' });
-    input.focus();
-    promptInput();
-    screen.render();
-  },
-};
-
 screen.key(['C-c', 'C-q'], () => { shutdown(); });
-// Bind only on screen (not on input) — input.key would stack listeners and
-// cause character doubling when the textbox is in readInput mode.
-for (const [key, action] of Object.entries(keyActions)) {
-  screen.key([key], action);
-}
 
 screen.program.on('keypress', (ch, key) => {
   const keyName = key?.name || null;
-  logEvent('debug', 'raw_keypress', {
-    name: keyName,
-    full: key?.full || null,
-    sequence: key?.sequence || null,
-    ch: ch || null,
-    ctrl: !!key?.ctrl,
-    meta: !!key?.meta,
-    shift: !!key?.shift,
-  });
-  if (keyName && keyActions[keyName]) {
-    keyActions[keyName]();
+  if (key?.ctrl && ['c', 'q'].includes(keyName)) return shutdown();
+  if (keyName === 'tab') {
+    if (screen.focused === sidebar) input.focus();
+    else sidebar.focus();
+    screen.render();
+    return;
   }
+  if (keyName === 'escape') {
+    input.focus();
+    screen.render();
+    return;
+  }
+  if (screen.focused !== input) return;
+  if (keyName === 'enter' || keyName === 'return') return submitInput();
+  if (keyName === 'backspace') return deleteBack();
+  if (keyName === 'delete') return deleteForward();
+  if (keyName === 'home' || (key?.ctrl && keyName === 'a')) { inputCursor = 0; return renderInput(); }
+  if (keyName === 'end' || (key?.ctrl && keyName === 'e')) { inputCursor = inputBuffer.length; return renderInput(); }
+  if (keyName === 'left') { key.ctrl || key.meta ? wordLeft() : (inputCursor = Math.max(0, inputCursor - 1), renderInput()); return; }
+  if (keyName === 'right') { key.ctrl || key.meta ? wordRight() : (inputCursor = Math.min(inputBuffer.length, inputCursor + 1), renderInput()); return; }
+  if (key?.ctrl && keyName === 'w') return deleteWordBack();
+  if (ch && !key?.ctrl && !key?.meta && !/^[\x00-\x1f\x7f]$/.test(ch)) insertInput(ch);
 });
 
 sidebar.on('select', (_item, index) => {
@@ -768,7 +660,6 @@ sidebar.on('select', (_item, index) => {
   if (index === 0) {
     state.currentTarget = null;
     renderView('__all__');
-    logEvent('info', 'sidebar_action', { index, item: rawItem, action: 'select_all' });
   } else {
     const roomName = [...state.rooms][index - 1];
     if (roomName) {
@@ -776,31 +667,26 @@ sidebar.on('select', (_item, index) => {
       state.unreadBuckets.delete(roomName);
       updateSidebar();
       renderView(roomName);
-      logEvent('info', 'sidebar_action', { index, item: rawItem, action: 'select_room', room: roomName });
     }
   }
   updateStatus();
   input.focus();
-  promptInput();
+  renderInput();
 });
 
 // ---------- Lifecycle ----------
 
 async function startup() {
   systemLog(`llmmsg-chat v${VERSION} starting as ${AGENT} against ${HUB_URL}`);
-  systemLog(`event log: ${EVENTS_DB_PATH} (debug=${DEBUG})`);
   try {
     const reg = await hub.register(state.agent, process.cwd());
     if (reg.status !== 200) {
       systemLog(`register failed: ${reg.body?.error || reg.status}`);
-      logEvent('error', 'register_fail', { status: reg.status, body: reg.body });
       return;
     }
     systemLog(`registered`);
-    logEvent('info', 'registered');
   } catch (err) {
     systemLog(`register error: ${err.message}`);
-    logEvent('error', 'register_err', { err: err.message });
     return;
   }
 
@@ -809,7 +695,6 @@ async function startup() {
     if (r.status === 200 && Array.isArray(r.body?.aros)) {
       for (const aro of r.body.aros) state.rooms.add(`aro:${aro}`);
       updateSidebar();
-      logEvent('info', 'loaded_aros', { aros: [...state.rooms] });
     }
   } catch {}
 
@@ -828,7 +713,6 @@ async function startup() {
     if (r.status === 200 && Array.isArray(r.body)) {
       for (const msg of r.body) handleIncoming(msg);
       if (r.body.length) systemLog(`replayed ${r.body.length} unread`);
-      logEvent('info', 'replayed_unread', { count: r.body.length });
     }
   } catch {}
 
@@ -836,11 +720,9 @@ async function startup() {
 }
 
 async function shutdown() {
-  logEvent('info', 'shutdown');
   try {
     await hub.unregister(state.agent);
   } catch {}
-  try { eventsDb.close(); } catch {}
   screen.destroy();
   process.exit(0);
 }
@@ -850,7 +732,7 @@ input.focus();
 updateStatus();
 updateSidebar();
 screen.render();
-promptInput();
+renderInput();
 
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);

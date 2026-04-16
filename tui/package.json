@@ -1,6 +1,6 @@
 {
   "name": "llmmsg-chat",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "TUI chat client for llmmsg-channel — human agent in the llmmsg ecosystem",
   "main": "llmmsg-chat.mjs",
   "type": "module",
@@ -11,7 +11,6 @@
     "start": "node llmmsg-chat.mjs"
   },
   "dependencies": {
-    "better-sqlite3": "^12.9.0",
     "blessed": "^0.1.81"
   }
 }
