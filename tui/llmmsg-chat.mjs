@@ -10,7 +10,7 @@ import os from 'node:os';
 import blessed from 'blessed';
 import Database from 'better-sqlite3';
 
-const VERSION = '0.2.4';
+const VERSION = '0.2.5';
 
 // ---------- Settings ----------
 
@@ -18,7 +18,7 @@ const CONFIG_DIR = path.join(os.homedir(), '.config', 'llmmsg-chat');
 const SETTINGS_PATH = path.join(CONFIG_DIR, 'settings.json');
 const EVENTS_DB_PATH = path.join(CONFIG_DIR, 'llmmsg-chat.sqlite');
 const DEBUG = true; // hardcoded debug logger; toggle later if needed
-const SENDER_COLORS = ['cyan', 'green', 'yellow', 'magenta', 'blue', 'red', 'white'];
+const SENDER_COLORS = ['cyan', 'green', 'yellow', 'magenta', 'blue', 'red'];
 
 fs.mkdirSync(CONFIG_DIR, { recursive: true });
 
