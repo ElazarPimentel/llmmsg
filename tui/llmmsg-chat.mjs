@@ -9,7 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import blessed from 'blessed';
 
-const VERSION = '0.2.6';
+const VERSION = '0.2.7';
 
 // ---------- Settings ----------
 
@@ -405,15 +405,8 @@ function handleIncoming(event) {
 let inputBuffer = '';
 let inputCursor = 0;
 
-function escapeTags(text) {
-  return String(text).replace(/[{}]/g, (ch) => (ch === '{' ? '{open}' : '{close}'));
-}
-
 function renderInput() {
-  const before = escapeTags(inputBuffer.slice(0, inputCursor));
-  const current = inputCursor < inputBuffer.length ? escapeTags(inputBuffer[inputCursor]) : ' ';
-  const after = escapeTags(inputBuffer.slice(inputCursor + 1));
-  input.setContent(`${before}{inverse}${current}{/inverse}${after}`);
+  input.setContent(inputBuffer);
   input.value = inputBuffer;
   screen.render();
 }
