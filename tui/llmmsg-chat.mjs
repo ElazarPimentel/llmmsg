@@ -10,7 +10,7 @@ import os from 'node:os';
 import blessed from 'blessed';
 import Database from 'better-sqlite3';
 
-const VERSION = '0.2.3';
+const VERSION = '0.2.4';
 
 // ---------- Settings ----------
 
@@ -18,6 +18,7 @@ const CONFIG_DIR = path.join(os.homedir(), '.config', 'llmmsg-chat');
 const SETTINGS_PATH = path.join(CONFIG_DIR, 'settings.json');
 const EVENTS_DB_PATH = path.join(CONFIG_DIR, 'llmmsg-chat.sqlite');
 const DEBUG = true; // hardcoded debug logger; toggle later if needed
+const SENDER_COLORS = ['cyan', 'green', 'yellow', 'magenta', 'blue', 'red', 'white'];
 
 fs.mkdirSync(CONFIG_DIR, { recursive: true });
 
@@ -205,7 +206,7 @@ const sidebar = blessed.list({
   top: 0,
   left: 0,
   width: settings.sidebarWidth,
-  height: '100%-5',
+  height: '100%-7',
   label: ' Rooms ',
   border: { type: 'line' },
   style: {
@@ -223,7 +224,7 @@ const chatPane = blessed.log({
   top: 0,
   left: settings.sidebarWidth,
   right: 0,
-  height: '100%-5',
+  height: '100%-7',
   label: ` chat — ${AGENT} — llmmsg-chat v${VERSION} `,
   border: { type: 'line' },
   style: { border: { fg: 'grey' } },
@@ -235,7 +236,7 @@ const chatPane = blessed.log({
 
 const statusBar = blessed.box({
   parent: screen,
-  bottom: 4,
+  bottom: 6,
   left: 0,
   right: 0,
   height: 1,
@@ -243,13 +244,13 @@ const statusBar = blessed.box({
   content: ' SPEAKING IN: [none — pick a room (Tab), /msg, or menu (F1)]',
 });
 
-// Input MUST be height 3 minimum: top border + 1 content row + bottom border.
+// Input height 5: top border + 3 content rows + bottom border.
 const input = blessed.textbox({
   parent: screen,
   bottom: 1,
   left: 0,
   right: 0,
-  height: 3,
+  height: 5,
   label: ' input (Enter=send, Esc=focus input, F1=menu, F9=quit) ',
   border: { type: 'line' },
   style: {
@@ -312,6 +313,18 @@ function renderView(bucket) {
   screen.render();
 }
 
+function senderColor(name) {
+  if (name === state.agent) return 'cyan';
+  let hash = 0;
+  for (const ch of String(name || '')) hash = ((hash * 31) + ch.charCodeAt(0)) >>> 0;
+  return SENDER_COLORS[hash % SENDER_COLORS.length];
+}
+
+function dividerLine() {
+  const width = Math.max(24, (chatPane.width || screen.width || 80) - 4);
+  return '─'.repeat(width);
+}
+
 function printMessage(msg, showContext) {
   const { from, to, body, _bucket, origin_aro } = msg;
   const ts = new Date().toTimeString().slice(0, 8);
@@ -327,10 +340,9 @@ function printMessage(msg, showContext) {
     else prefix = `[→${to}] `;
   }
 
-  let color = 'white';
-  if (from === state.agent) color = 'cyan';
-  else if (to === state.agent && !origin_aro) color = 'yellow';
+  const color = senderColor(from);
 
+  chatPane.log(`{grey-fg}${dividerLine()}{/grey-fg}`);
   chatPane.log(`{grey-fg}${ts}{/grey-fg} ${prefix}{${color}-fg}<${from}>{/${color}-fg} ${text}`);
 }
 
