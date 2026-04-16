@@ -11,3 +11,7 @@ Reply routing: if the incoming channel metadata has `origin_aro`, reply to that 
 ## Project Instructions
 
 Read CLAUDE.md and ECOSYSTEM.md before editing this repository. CLAUDE.md contains the current operational notes; ECOSYSTEM.md is the canonical map of launchers, hub, bridge, MCP server, DB, and related tools.
+
+## Implementation Discipline
+
+Prefer native library/widget behavior over custom reimplementation. Do not rebuild normal terminal input, focus, cursor movement, or editor behavior unless the native implementation is verified insufficient and the custom path is intentionally scoped.

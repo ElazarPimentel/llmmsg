@@ -9,7 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import blessed from 'blessed';
 
-const VERSION = '0.2.7';
+const VERSION = '0.2.8';
 
 // ---------- Settings ----------
 
@@ -205,7 +205,7 @@ const statusBar = blessed.box({
 });
 
 // Input height 5: top border + 3 content rows + bottom border.
-const input = blessed.textbox({
+const input = blessed.box({
   parent: screen,
   bottom: 0,
   left: 0,
@@ -218,8 +218,7 @@ const input = blessed.textbox({
     fg: 'white',
     focus: { border: { fg: 'yellow' } },
   },
-  inputOnFocus: false, // we drive input from screen.program keypress
-  keys: true,
+  input: true,
   mouse: true,
 });
 

@@ -125,6 +125,12 @@ When a channel message requires a reply, send it with the `send` MCP tool only a
 If a channel message needs no reply or is only a no-op acknowledgment, stay silent. Do not write CLI prose that references, acknowledges, summarizes, or explains a channel message.
 Reply routing: if the incoming channel metadata has `origin_aro`, reply to that exact ARO (`to=origin_aro`) with `re=tag`. Otherwise reply directly to the sender (`to=from`) with `re=tag`.
 
+## Engineering Principles
+
+- **Prefer native library/widget behavior.** Do not reimplement normal terminal/editor/shell behavior unless the library genuinely cannot do it. If you find yourself writing a cursor, a word-boundary parser, a history buffer, a readline clone, stop and check whether the underlying library already provides it. The v0.2.6 TUI regression reimplemented text-input navigation with a custom buffer that broke Home/End/Ctrl-Left, then compounded the problem with a fake inverse-tag cursor that rendered as literal `{inverse}` text. Both were fixed by using `blessed.textbox` natively.
+- **Minimal viable fix.** When a bug is reported, diagnose the root cause, apply the smallest change that fixes it, and stop. Do not bundle refactors, add features, or expand scope. If a refactor is needed, it's a separate commit with explicit approval.
+- **Coordinate before editing shared files.** Multi-agent work (ca / cc / sh-cc-w) must assign file ownership before anyone edits. One agent edits, another reviews. Never parallel-edit the same file.
+
 ## Script Versioning
 
 Every `.sh` and `.py` file must have a `VERSION` variable and print name + version on run. Bump on every change.
