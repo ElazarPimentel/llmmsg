@@ -9,7 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import termkit from 'terminal-kit';
 
-const VERSION = '0.3.4';
+const VERSION = '0.3.5';
 const term = termkit.terminal;
 
 // ---------- Settings ----------
@@ -155,10 +155,18 @@ function addMessage(bucket, entry) {
   }
 }
 
+function messageFingerprint(msg) {
+  const body = typeof msg.body === 'string' ? msg.body : JSON.stringify(msg.body || '');
+  return [msg.from || '', msg.re || '', msg.origin_aro || msg._bucket || '', body].join('\x1f');
+}
+
 function addHistoryMessage(bucket, entry) {
   if (!state.history[bucket]) state.history[bucket] = [];
+  const fingerprint = messageFingerprint(entry);
   const existingIdx = state.history[bucket].findIndex((msg) =>
-    (entry.id && msg.id === entry.id) || (entry.tag && msg.tag === entry.tag)
+    (entry.id && msg.id === entry.id) ||
+    (entry.tag && msg.tag === entry.tag) ||
+    messageFingerprint(msg) === fingerprint
   );
   if (existingIdx >= 0) {
     state.history[bucket][existingIdx] = { ...state.history[bucket][existingIdx], ...entry };
