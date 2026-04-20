@@ -9,7 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import termkit from 'terminal-kit';
 
-const VERSION = '0.3.3';
+const VERSION = '0.3.4';
 const term = termkit.terminal;
 
 // ---------- Settings ----------
@@ -131,6 +131,7 @@ const hub = {
   },
   guide: () => httpRequest('GET', '/guide'),
   readUnread: (agent) => httpRequest('GET', `/read-unread?agent=${encodeURIComponent(agent)}`),
+  history: (agent, bucket, limit = 80) => httpRequest('GET', `/history?agent=${encodeURIComponent(agent)}&bucket=${encodeURIComponent(bucket)}&limit=${limit}`),
 };
 
 // ---------- State ----------
@@ -152,6 +153,14 @@ function addMessage(bucket, entry) {
     state.history.__all__.push({ ...entry, _bucket: bucket });
     if (state.history.__all__.length > 500) state.history.__all__.shift();
   }
+}
+
+function addHistoryMessage(bucket, entry) {
+  if (!state.history[bucket]) state.history[bucket] = [];
+  if (state.history[bucket].some((msg) => msg.id && msg.id === entry.id)) return;
+  state.history[bucket].push(entry);
+  state.history[bucket].sort((a, b) => (a.id || 0) - (b.id || 0));
+  if (state.history[bucket].length > 200) state.history[bucket] = state.history[bucket].slice(-200);
 }
 
 // ---------- Layout ----------
@@ -625,9 +634,10 @@ async function sendToTarget(target, text) {
     return;
   }
   const tag = result.body?.tag;
-  if (tag && target.startsWith('aro:')) {
-    state.recentTags.set(tag, target);
-    if (state.recentTags.size > 200) {
+  const tags = Array.isArray(result.body?.tags) ? result.body.tags : (tag ? [tag] : []);
+  if (target.startsWith('aro:')) {
+    for (const t of tags) state.recentTags.set(t, target);
+    while (state.recentTags.size > 200) {
       const first = state.recentTags.keys().next().value;
       state.recentTags.delete(first);
     }
@@ -656,7 +666,7 @@ async function handleCommand(cmd, arg, rest) {
         state.currentTarget = room;
         state.unreadBuckets.delete(room);
         updateRoomsBar();
-        renderViewForBucket(room);
+        await showBucket(room);
         drawFrame();
         logSystem(`joined aro:${aro}`);
       } else {
@@ -696,7 +706,7 @@ async function handleCommand(cmd, arg, rest) {
       state.currentTarget = aro;
       state.unreadBuckets.delete(aro);
       updateRoomsBar();
-      renderViewForBucket(aro);
+      await showBucket(aro);
       drawFrame();
       break;
     }
@@ -770,6 +780,22 @@ function renderViewForBucket(bucket) {
   renderChat();
 }
 
+async function loadHistoryForBucket(bucket) {
+  if (!bucket || bucket === '__all__') return;
+  const r = await hub.history(state.agent, bucket);
+  if (r.status !== 200 || !Array.isArray(r.body)) return;
+  for (const msg of r.body) {
+    const entry = { ...msg };
+    if (bucket.startsWith('aro:')) entry._bucket = bucket;
+    addHistoryMessage(bucket, entry);
+  }
+}
+
+async function showBucket(bucket) {
+  await loadHistoryForBucket(bucket);
+  renderViewForBucket(bucket);
+}
+
 // ---------- Key handling ----------
 
 let lastCharTime = 0;
@@ -841,7 +867,7 @@ function selectRoomItem(index) {
       state.currentTarget = roomName;
       state.unreadBuckets.delete(roomName);
       updateRoomsBar();
-      renderViewForBucket(roomName);
+      showBucket(roomName);
     }
   }
   drawFrame();

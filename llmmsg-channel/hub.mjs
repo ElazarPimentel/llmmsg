@@ -229,6 +229,26 @@ const stmtSearch = db.prepare(
 const stmtLog = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM messages ORDER BY id DESC LIMIT ?`
 );
+const stmtHistoryAro = db.prepare(
+  `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM (
+     SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM messages
+     WHERE retracted_at IS NULL
+       AND (
+         origin_aro = ?
+         OR re IN (SELECT tag FROM messages WHERE origin_aro = ?)
+       )
+     ORDER BY id DESC LIMIT ?
+   ) ORDER BY id`
+);
+const stmtHistoryDm = db.prepare(
+  `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM (
+     SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM messages
+     WHERE origin_aro IS NULL
+       AND ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
+       AND retracted_at IS NULL
+     ORDER BY id DESC LIMIT ?
+   ) ORDER BY id`
+);
 const stmtCheckRoster = db.prepare(`SELECT 1 FROM roster WHERE agent = ?`);
 const stmtCheckOnline = db.prepare(
   `SELECT 1 FROM roster WHERE agent = ? AND last_seen_at > strftime('%s','now') - 30`
@@ -791,6 +811,7 @@ const server = http.createServer(async (req, res) => {
           remote_members: remoteAgents,
           sent: results.length + remoteResults.length,
           ids: results.map(r => r.id),
+          tags: results.map(r => r.tag).concat(remoteResults.map(r => r.tag)),
           forwarded: remoteResults.length > 0,
           remote_lookups: remoteLookups.map(r => ({ hub: r.hub, ok: r.ok, count: r.online.length })),
           remotes: remoteResults.flatMap(r => r.forwards.map(f => ({ agent: r.agent, hub: f.hub, ok: f.ok, queued: f.queued || false }))),
@@ -912,6 +933,26 @@ const server = http.createServer(async (req, res) => {
         const body = safeParse(r.body);
         const preview = typeof body === 'object' ? (body.summary || body.message || JSON.stringify(body)).slice(0, 120) : String(body).slice(0, 120);
         return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, preview, origin_aro: r.origin_aro || null };
+      });
+      res.end(JSON.stringify(messages));
+      return;
+    }
+
+    if (req.method === 'GET' && path === '/history') {
+      const agent = (url.searchParams.get('agent') || '').toLowerCase();
+      const bucket = url.searchParams.get('bucket');
+      const limit = Math.max(1, Math.min(200, parseInt(url.searchParams.get('limit') || '80')));
+      if (!agent || !bucket) { res.writeHead(400); res.end(JSON.stringify({ error: 'missing agent or bucket' })); return; }
+
+      let rows;
+      if (bucket.startsWith('aro:')) {
+        rows = stmtHistoryAro.all(bucket, bucket, limit);
+      } else {
+        rows = stmtHistoryDm.all(agent, bucket, bucket, agent, limit);
+      }
+      const messages = rows.map(r => {
+        if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
       });
       res.end(JSON.stringify(messages));
       return;
