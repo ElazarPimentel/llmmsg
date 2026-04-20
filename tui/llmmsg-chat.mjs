@@ -9,7 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import termkit from 'terminal-kit';
 
-const VERSION = '0.3.2';
+const VERSION = '0.3.3';
 const term = termkit.terminal;
 
 // ---------- Settings ----------
@@ -486,7 +486,11 @@ function displayBucketForEvent(event, bucket) {
 
 function shouldPrintIncoming(event, bucket) {
   if (!state.currentTarget) return true;
-  return displayBucketForEvent(event, bucket) === state.currentTarget;
+  if (displayBucketForEvent(event, bucket) === state.currentTarget) return true;
+  // DMs to me are personal inbox — always visible regardless of which tab is active.
+  // (Rooms bar only lists AROs, so a filtered DM would be invisible otherwise.)
+  if (!event.origin_aro && event.to === state.agent && event.from !== state.agent) return true;
+  return false;
 }
 
 // ---------- SSE ----------
