@@ -1,4 +1,4 @@
-# GITPUSH_INFO_VERSION=3.4
+# GITPUSH_INFO_VERSION=3.5
 #!/bin/bash
 # Pre-push checks for llmmsg
 # Syntax-check the main Node.js files

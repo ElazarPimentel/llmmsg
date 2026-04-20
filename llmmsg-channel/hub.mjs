@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '2.9';
+const VERSION = '3.0';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
@@ -545,17 +545,6 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      // Auto-join aro: extract project name from agent name segments
-      // Whey (segment 0): pluto-pm-ccs → aro "pluto"
-      // Lezama (segment 1): pm-pluto-ccs-l → aro "pluto-l"
-      // Configurable via LLMMSG_ARO_SEGMENT (default: 0)
-      const parts = agent.split('-');
-      const project = parts[ARO_SEGMENT] || parts[0];
-      if (project && project !== agent) {
-        const aroName = SITE_SUFFIX ? `${project}${SITE_SUFFIX}` : project;
-        stmtAroJoin.run(aroName, agent);
-      }
-
       // Migrate SSE connection from old_agent (may be an unregistered-* alias) to new agent name
       if (old_agent && old_agent !== agent) {
         const sseRes = channels.get(old_agent);
@@ -609,7 +598,6 @@ const server = http.createServer(async (req, res) => {
         const existed = stmtCheckRoster.get(agent);
         if (existed) {
           stmtUnregister.run(agent);
-          stmtDeleteAroByAgent.run(agent);
           const sseConn = channels.get(agent);
           if (sseConn) {
             sseConn.end();
