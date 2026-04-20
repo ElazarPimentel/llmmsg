@@ -33,6 +33,7 @@ const stmtPut = db.prepare(`
     thread_id = excluded.thread_id,
     updated_at = excluded.updated_at
 `);
+const stmtDel = db.prepare('DELETE FROM thread_map WHERE agent = ? AND cwd = ?');
 
 function getMapping(agent, cwd) {
   return stmtGet.get(agent, cwd)?.thread_id || '';
@@ -40,6 +41,10 @@ function getMapping(agent, cwd) {
 
 function putMapping(agent, cwd, threadId) {
   stmtPut.run(agent, cwd, threadId);
+}
+
+function delMapping(agent, cwd) {
+  return stmtDel.run(agent, cwd).changes;
 }
 
 async function withClient(fn) {
@@ -123,6 +128,13 @@ async function main() {
     return;
   }
 
+  if (command === 'del') {
+    const [agent, cwd] = args;
+    const changes = delMapping(agent, cwd);
+    process.stdout.write(String(changes));
+    return;
+  }
+
   if (command === 'loaded') {
     const loaded = await listLoadedThreadIds();
     process.stdout.write(JSON.stringify(loaded));
@@ -136,7 +148,7 @@ async function main() {
     return;
   }
 
-  console.error('Usage: cf-thread-map.mjs get <agent> <cwd> | put <agent> <cwd> <threadId> | loaded | watch <agent> <cwd> <baselineJson> [timeoutMs]');
+  console.error('Usage: cf-thread-map.mjs get <agent> <cwd> | put <agent> <cwd> <threadId> | del <agent> <cwd> | loaded | watch <agent> <cwd> <baselineJson> [timeoutMs]');
   process.exit(1);
 }
 

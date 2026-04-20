@@ -273,7 +273,23 @@ async function main() {
     return;
   }
 
-  console.error('Usage: bridge.mjs register <agent> [--thread-id <id> | --cwd <cwd>] | deliver <agent> | watch [--poll-ms N] | list');
+  if (command === 'unregister') {
+    const agent = args[0];
+    if (!agent) {
+      console.error('unregister requires an agent name');
+      process.exit(1);
+    }
+    const registry = loadRegistry();
+    const existed = Object.prototype.hasOwnProperty.call(registry, agent);
+    if (existed) {
+      delete registry[agent];
+      saveRegistry(registry);
+    }
+    console.log(JSON.stringify({ ok: true, agent, removed: existed }));
+    return;
+  }
+
+  console.error('Usage: bridge.mjs register <agent> [--thread-id <id> | --cwd <cwd>] | deliver <agent> | watch [--poll-ms N] | list | unregister <agent>');
   process.exit(1);
 }
 
