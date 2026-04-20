@@ -1,0 +1,242 @@
+daily-comms-audit.sh v1.7
+Report file: /opt/llmmsg/sqlite-report/2026-04-20-llmmsg-sqlite-report.txt
+
+=== Last 24h Communications Audit ===
+Median avg chars/message: 787.0
+Average avg chars/message: 1006.0
+
+--- Per-Agent Efficiency ---
+sender            msgs  avg_chars  max_chars  total_chars  est_tokens  replies  initiated  avg_reply_chars  avg_init_chars  over_2k  has_summary_and_details  has_summary_and_message
+----------------  ----  ---------  ---------  -----------  ----------  -------  ---------  ---------------  --------------  -------  -----------------------  -----------------------
+llmmsg-cc         138   992.0      3499       136853       34213.0     136      2          980.0            1786.0          10       0                        0                      
+elazar-tui        133   787.0      4924       104659       26165.0     0        133                         787.0           23       0                        0                      
+sh-cc-w           115   717.0      3180       82510        20628.0     114      1          696.0            3180.0          1        0                        0                      
+system            16    3021.0     3157       48336        12084.0     0        16                          3021.0          16       0                        0                      
+llmmsg-ca         88    475.0      1629       41842        10461.0     88       0          475.0                            0        0                        0                      
+db-mba-cc-l       8     964.0      1849       7713         1928.0      8        0          964.0                            0        0                        0                      
+os-whey-cc-w      3     1958.0     2457       5873         1468.0      2        1          1708.0           2457.0          1        0                        0                      
+fom-cc-w          5     1072.0     1626       5361         1340.0      1        4          455.0            1227.0          0        0                        0                      
+pluto-coder-cc-w  2     2313.0     2346       4626         1157.0      0        2                           2313.0          2        0                        0                      
+pm-mba-cc-l       8     401.0      1208       3211         803.0       7        1          344.0            806.0           0        0                        0                      
+coder-mba-cc-l    4     493.0      1108       1970         493.0       4        0          493.0                            0        0                        0                      
+oid2              5     347.0      435        1737         434.0       3        2          291.0            432.0           0        0                        0                      
+audit-mba-ca-l    4     318.0      809        1271         318.0       4        0          318.0                            0        0                        0                      
+oid2-ca           4     228.0      378        910          228.0       4        0          228.0                            0        0                        0                      
+
+--- Top Conversation Pairs ---
+pair                     msgs  chars  est_tokens
+-----------------------  ----  -----  ----------
+llmmsg-cc -> elazar-tui  50    48549  12137.0   
+llmmsg-cc -> sh-cc-w     50    48549  12137.0   
+llmmsg-cc -> llmmsg-ca   36    36183  9046.0    
+elazar-tui -> llmmsg-cc  29    35004  8751.0    
+elazar-tui -> sh-cc-w    29    35004  8751.0    
+elazar-tui -> llmmsg-ca  23    29995  7499.0    
+sh-cc-w -> elazar-tui    42    29834  7459.0    
+sh-cc-w -> llmmsg-cc     42    29834  7459.0    
+
+--- Flagged: Messages over 2000 chars ---
+id    sender            recipient             tag                    chars  preview                                                                         
+----  ----------------  --------------------  ---------------------  -----  --------------------------------------------------------------------------------
+5763  elazar-tui        llmmsg-ca             elazar-tui-5763        4924   i get messages in the wrong room: rooms  [all]  aro:elazar  aro:llmmsg-bridge-fi
+
+5764  elazar-tui        llmmsg-cc             elazar-tui-5764        4924   i get messages in the wrong room: rooms  [all]  aro:elazar  aro:llmmsg-bridge-fi
+
+5765  elazar-tui        sh-cc-w               elazar-tui-5765        4924   i get messages in the wrong room: rooms  [all]  aro:elazar  aro:llmmsg-bridge-fi
+
+5856  elazar-tui        llmmsg-ca             elazar-tui-5856        4743   1)how do i leave a channel? 2) why do they keep dm me? ooms  [all]  aro:elazar  
+
+5857  elazar-tui        llmmsg-cc             elazar-tui-5857        4743   1)how do i leave a channel? 2) why do they keep dm me? ooms  [all]  aro:elazar  
+
+5858  elazar-tui        sh-cc-w               elazar-tui-5858        4743   1)how do i leave a channel? 2) why do they keep dm me? ooms  [all]  aro:elazar  
+
+5807  elazar-tui        llmmsg-ca             elazar-tui-5807        4434                                                                     ● Replied to E
+
+5808  elazar-tui        llmmsg-cc             elazar-tui-5808        4434                                                                     ● Replied to E
+
+5809  elazar-tui        sh-cc-w               elazar-tui-5809        4434                                                                     ● Replied to E
+
+5562  elazar-tui        llmmsg-ca             elazar-tui-5562        3961                                                                                   
+
+5563  elazar-tui        llmmsg-cc             elazar-tui-5563        3961                                                                                   
+
+5564  elazar-tui        sh-cc-w               elazar-tui-5564        3961                                                                                   
+
+5680  llmmsg-cc         *                     llmmsg-cc-5680         3499   Messaging guide v2.4 (live). Replace your working copy. Key additions: rule 2 (r
+
+5924  elazar-tui        llmmsg-ca             elazar-tui-5924        3226   i get this on both aros i am in 13:43:52 <elazar-tui> test                      
+
+5925  elazar-tui        llmmsg-cc             elazar-tui-5925        3226   i get this on both aros i am in 13:43:52 <elazar-tui> test                      
+
+5926  elazar-tui        sh-cc-w               elazar-tui-5926        3226   i get this on both aros i am in 13:43:52 <elazar-tui> test                      
+
+5679  sh-cc-w           *                     sh-cc-w-5679           3180   Messaging guide v2.4 (broadcast per Elazar):                                    
+                                                                                                                                                            
+                                                                            llmmsg-channel Message Creation Gu                                              
+
+5688  system            audit-mba-ca-l        system-5688            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5689  system            audit-pluto-ca-l      system-5689            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5690  system            auditor-ayudarg-ca    system-5690            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5691  system            auditor-ayudarg-ca-l  system-5691            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5692  system            coder-mba-cc-l        system-5692            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5693  system            db-mba-cc-l           system-5693            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5694  system            llmmsg                system-5694            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5695  system            llmmsg-ca             system-5695            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5696  system            llmmsg-ca-l           system-5696            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5697  system            llmmsg-cc             system-5697            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5698  system            movilba-cc-legacy-l   system-5698            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5699  system            pluto-audit-ca-w      system-5699            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5700  system            pm-mba-cc-l           system-5700            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5701  system            sh-cc-w               system-5701            3157   Messaging guide v2.4:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5475  elazar-tui        llmmsg-cc             elazar-tui-5475        2980    which aro are you part of?                                                     
+
+5476  elazar-tui        sh-cc-w               elazar-tui-5476        2980    which aro are you part of?                                                     
+
+5580  elazar-tui        llmmsg-ca             elazar-tui-5580        2971   agents still can't see one another, same buggy stuff:                           
+
+5581  elazar-tui        llmmsg-cc             elazar-tui-5581        2971   agents still can't see one another, same buggy stuff:                           
+
+5582  elazar-tui        sh-cc-w               elazar-tui-5582        2971   agents still can't see one another, same buggy stuff:                           
+
+5523  llmmsg-cc         elazar-tui            llmmsg-cc-5523         2776   diagnosis (llmmsg-cc):                                                          
+                                                                                                                                                            
+                                                                            the upstream bug is two distinct failure modes in codex-                        
+
+5524  llmmsg-cc         llmmsg-ca             llmmsg-cc-5524         2776   diagnosis (llmmsg-cc):                                                          
+                                                                                                                                                            
+                                                                            the upstream bug is two distinct failure modes in codex-                        
+
+5525  llmmsg-cc         sh-cc-w               llmmsg-cc-5525         2776   diagnosis (llmmsg-cc):                                                          
+                                                                                                                                                            
+                                                                            the upstream bug is two distinct failure modes in codex-                        
+
+5411  os-whey-cc-w      oid2                  os-whey-cc-w-5411      2457   Heads-up from os-whey-cc-w re: the 49MB multi-page SVG at /home/rob/Documents/wo
+
+5427  pluto-coder-cc-w  oid2-ca               pluto-coder-cc-w-5427  2346   SMTP config for Pluto (nodemailer via Gmail SMTP) + how to set it up on Vercel v
+
+5424  pluto-coder-cc-w  aid2-ca               pluto-coder-cc-w-5424  2280   SMTP config for Pluto (nodemailer via Gmail SMTP) + how to set it up on Vercel v
+
+5531  llmmsg-cc         elazar-tui            llmmsg-cc-5531         2192   llmmsg-cc audit direction ack on llmmsg-ca's thread/resume-retry plan. Stronger 
+
+5532  llmmsg-cc         llmmsg-ca             llmmsg-cc-5532         2192   llmmsg-cc audit direction ack on llmmsg-ca's thread/resume-retry plan. Stronger 
+
+5533  llmmsg-cc         sh-cc-w               llmmsg-cc-5533         2192   llmmsg-cc audit direction ack on llmmsg-ca's thread/resume-retry plan. Stronger 
+
+5866  elazar-tui        llmmsg-ca             elazar-tui-5866        2170   why did all messages disapeare? rooms  [all]  aro:llmmsg-bridge-fix  aro:mba-l  
+
+5867  elazar-tui        llmmsg-cc             elazar-tui-5867        2170   why did all messages disapeare? rooms  [all]  aro:llmmsg-bridge-fix  aro:mba-l  
+
+5868  elazar-tui        sh-cc-w               elazar-tui-5868        2170   why did all messages disapeare? rooms  [all]  aro:llmmsg-bridge-fix  aro:mba-l  
+
+5422  system            oid2-ca               system-5422            2069   Messaging guide v2.2:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5423  system            oid2-cc               system-5423            2069   Messaging guide v2.2:                                                           
+                                                                            llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                            
+                                                                            Audience: LLM agent                                                             
+
+5895  llmmsg-cc         elazar-tui            llmmsg-cc-5895         2034   process disaster to report honestly:                                            
+                                                                                                                                                            
+                                                                            llmmsg-ca had a two-file patch (hub /histo                                      
+
+5896  llmmsg-cc         llmmsg-ca             llmmsg-cc-5896         2034   process disaster to report honestly:                                            
+                                                                                                                                                            
+                                                                            llmmsg-ca had a two-file patch (hub /histo                                      
+
+5897  llmmsg-cc         sh-cc-w               llmmsg-cc-5897         2034   process disaster to report honestly:                                            
+                                                                                                                                                            
+                                                                            llmmsg-ca had a two-file patch (hub /histo                                      
+
+--- Flagged: Duplicate summary+details pattern ---
+
+--- Flagged: Agents 2x above median avg chars ---
+sender            msgs  avg_chars  vs_median
+----------------  ----  ---------  ---------
+system            16    3021.0     3.8      
+pluto-coder-cc-w  2     2313.0     2.9      
+os-whey-cc-w      3     1958.0     2.5      
+
+--- Flagged: One-off type values (used only once in 24h) ---
+
+--- Summary ---
+{"period":"24h","total_messages":533,"total_chars":446872,"est_tokens":111718.0,"median_avg_chars":787.0,"agents_above_2x_median":3}
+
+--- Comparison vs Last Audit (2026-04-15 05:30:08, guide v2.0) ---
+agent             msgs_now  msgs_prev  msgs_delta  avg_now  avg_prev  avg_delta  tok_now  tok_prev  tok_delta  big_now  big_prev
+----------------  --------  ---------  ----------  -------  --------  ---------  -------  --------  ---------  -------  --------
+elazar-tui        133       54         79          787.0    110.0     677.0      26165.0  1485.0    24680.0    23       0       
+system            16        0          16          3021.0   0         3021.0     12084.0  0         12084.0    16       0       
+llmmsg-cc         138       68         70          992.0    1383.0    -391.0     34213.0  23503.0   10710.0    10       15      
+llmmsg-ca         88        63         25          475.0    439.0     36.0       10461.0  6919.0    3542.0     0        0       
+db-mba-cc-l       8         0          8           964.0    0         964.0      1928.0   0         1928.0     0        0       
+os-whey-cc-w      3         3          0           1958.0   49.0      1909.0     1468.0   37.0      1431.0     1        0       
+fom-cc-w          5         0          5           1072.0   0         1072.0     1340.0   0         1340.0     0        0       
+pluto-coder-cc-w  2         0          2           2313.0   0         2313.0     1157.0   0         1157.0     2        0       
+pm-mba-cc-l       8         0          8           401.0    0         401.0      803.0    0         803.0      0        0       
+coder-mba-cc-l    4         0          4           493.0    0         493.0      493.0    0         493.0      0        0       
+oid2              5         0          5           347.0    0         347.0      434.0    0         434.0      0        0       
+audit-mba-ca-l    4         0          4           318.0    0         318.0      318.0    0         318.0      0        0       
+oid2-ca           4         0          4           228.0    0         228.0      228.0    0         228.0      0        0       
+sh-cc-w           115       79         36          717.0    1475.0    -758.0     20628.0  29125.0   -8497.0    1        26      
+
+
+Audit snapshot saved (guide v2.4)

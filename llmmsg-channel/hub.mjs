@@ -229,15 +229,22 @@ const stmtSearch = db.prepare(
 const stmtLog = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM messages ORDER BY id DESC LIMIT ?`
 );
+// ARO history collapses fan-out rows into one logical message: a single ARO send
+// produces one DB row per recipient (same sender, ts, body, origin_aro, re), which
+// would otherwise render as N duplicates in the TUI's room view. Grouping on those
+// fields keeps one representative row (MIN id / tag) per logical message.
 const stmtHistoryAro = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM (
-     SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM messages
+     SELECT MIN(id) AS id, sender, MIN(recipient) AS recipient, MIN(tag) AS tag,
+            re, body, retracted_at, origin_aro
+     FROM messages
      WHERE retracted_at IS NULL
        AND (
          origin_aro = ?
          OR re IN (SELECT tag FROM messages WHERE origin_aro = ?)
        )
-     ORDER BY id DESC LIMIT ?
+     GROUP BY sender, ts, body, origin_aro, re, retracted_at
+     ORDER BY MIN(id) DESC LIMIT ?
    ) ORDER BY id`
 );
 const stmtHistoryDm = db.prepare(
