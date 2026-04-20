@@ -289,7 +289,21 @@ async function main() {
     return;
   }
 
-  console.error('Usage: bridge.mjs register <agent> [--thread-id <id> | --cwd <cwd>] | deliver <agent> | watch [--poll-ms N] | list | unregister <agent>');
+  if (command === 'is-suspended') {
+    const agent = args[0];
+    if (!agent) {
+      console.error('is-suspended requires an agent name');
+      process.exit(1);
+    }
+    const registry = loadRegistry();
+    const entry = registry[agent];
+    const suspended = Boolean(entry?.suspended);
+    const threadId = entry?.threadId || null;
+    console.log(JSON.stringify({ agent, suspended, threadId }));
+    return;
+  }
+
+  console.error('Usage: bridge.mjs register <agent> [--thread-id <id> | --cwd <cwd>] | deliver <agent> | watch [--poll-ms N] | list | unregister <agent> | is-suspended <agent>');
   process.exit(1);
 }
 
