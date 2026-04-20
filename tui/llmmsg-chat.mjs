@@ -157,8 +157,14 @@ function addMessage(bucket, entry) {
 
 function addHistoryMessage(bucket, entry) {
   if (!state.history[bucket]) state.history[bucket] = [];
-  if (state.history[bucket].some((msg) => msg.id && msg.id === entry.id)) return;
-  state.history[bucket].push(entry);
+  const existingIdx = state.history[bucket].findIndex((msg) =>
+    (entry.id && msg.id === entry.id) || (entry.tag && msg.tag === entry.tag)
+  );
+  if (existingIdx >= 0) {
+    state.history[bucket][existingIdx] = { ...state.history[bucket][existingIdx], ...entry };
+  } else {
+    state.history[bucket].push(entry);
+  }
   state.history[bucket].sort((a, b) => (a.id || 0) - (b.id || 0));
   if (state.history[bucket].length > 200) state.history[bucket] = state.history[bucket].slice(-200);
 }
