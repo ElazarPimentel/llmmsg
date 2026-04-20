@@ -26,7 +26,10 @@ import http from 'node:http';
 
 function hubRegister(agent, cwd) {
   if (!cwd) return Promise.resolve();
-  const data = JSON.stringify({ agent, cwd, old_agent: null });
+  // old_agent: agent makes the hub treat this as a self-refresh instead of a
+  // new-session claim. Without this, running `bridge.mjs register <agent>` for
+  // an already-connected Codex agent hits the hub's "active session" 409.
+  const data = JSON.stringify({ agent, cwd, old_agent: agent });
   return new Promise((resolve, reject) => {
     const req = http.request(`${HUB_URL}/register`, {
       method: 'POST',
