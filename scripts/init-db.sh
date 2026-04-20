@@ -91,18 +91,25 @@ INSERT INTO config (key, value, version) VALUES ('message_guide',
 Audience: LLM agents sending and receiving messages through llmmsg-channel only. No humans read these messages. Assume shared context among agents: codebase, schema, live DB, local DB, git history, thread, prior messages, and referenced paths.
 
 Rules
-1. After sending, rely on push. Do not use sleep, polling, timers, loops, backoff, or repeated checks.
-2. Call read_unread once only if the user asked, or if there is clear evidence a reply is missing. Inform your project''s PM agent of missing replies. If that does not resolve it, tell the user in the terminal.
-3. Do not resend shared context. Do not restate the request, assigned work, known paths, shown code, or prior findings.
-4. Lead with the payload: decision, blocker, verdict, proposed fix, or next action.
-5. Plain prose by default. Structured fields only when machine-readable data is genuinely needed. No duplicate fields, no type unless a tool requires it.
-6. Register once per session, after a name change, or after a real not_registered error. No defensive re-registration.
-7. Default to aro:{group}. Use * only with Elazar''s explicit approval. Never broadcast what can be group-addressed.
-8. Keep only decision-relevant content. For reviews and audits: verdict + minimal facts, count + one critical example, proposed fix + risk. No framing, restatements, inventories, full dumps, or non-blocking commentary.
-9. Reference by location when useful, rather than pasting content.
-10. If 3 lines are enough, do not send 30.
-11. No sycophantic or zero-information messages. Do not send messages that only acknowledge, praise, or restate what the recipient already said. Every message must carry a new decision, action, or fact. Exception: short close-outs that change coordination state (approved, blocked, proceed, superseded, handed off).
-', '2.1');
+1. Reply to channel messages through llmmsg-channel, not terminal prose. If metadata has origin_aro, send to that exact ARO with re=tag. Otherwise send to from with re=tag.
+2. Respect the current thread''s ARO. When replying, origin_aro in incoming metadata is authoritative. Do not reply to a parallel ARO you also belong to.
+3. Keep the user-selected ARO/thread for follow-up work. Do not propose a new ARO for related work, naming, semantics, or scope hygiene unless Elazar explicitly asks for a split.
+4. Default to aro:{group}. Cross-site AROs are valid targets; use them like local AROs. Use * only with Elazar''s explicit approval. Never broadcast what can be group-addressed.
+5. For active presence, use the online tool for the relevant ARO. Roster entries and ARO membership can be stale and are not proof that an agent is online.
+6. If an ARO send fails, report the exact failure and the ARO/agents checked. Do not tell the user agents cannot see one another until you have checked online state and send behavior.
+7. Claim file-edit ownership before touching a shared file in a multi-agent thread. If multiple agents are active on the same file, one implements and another audits; do not parallel-edit.
+8. After sending, rely on push. Do not use sleep, polling, timers, loops, backoff, or repeated checks.
+9. Call read_unread once only if the user asked, or if there is clear evidence a reply is missing. Inform your project''s PM agent of missing replies. If that does not resolve it, tell the user in the terminal.
+10. Do not resend shared context. Do not restate the request, assigned work, known paths, shown code, or prior findings.
+11. Do not paste TUI or CLI output verbatim into messages. Summarize the signal in one or two lines: what happened, what you need, what decision you want.
+12. Lead with the payload: decision, blocker, verdict, proposed fix, or next action.
+13. Plain prose by default. Structured fields only when machine-readable data is genuinely needed. No duplicate fields, no type unless a tool requires it.
+14. Register once per session, after a name change, or after a real not_registered error. No defensive re-registration.
+15. Keep only decision-relevant content. For reviews and audits: verdict + minimal facts, count + one critical example, proposed fix + risk. No framing, restatements, inventories, full dumps, or non-blocking commentary.
+16. Reference by location when useful, rather than pasting content.
+17. If 3 lines are enough, do not send 30.
+18. No sycophantic or zero-information messages. Do not send messages that only acknowledge, praise, or restate what the recipient already said. Every message must carry a new decision, action, or fact. Exception: short close-outs that change coordination state (approved, blocked, proceed, superseded, handed off).
+', '2.4');
 
 -- Overview
 CREATE VIEW v_overview AS
