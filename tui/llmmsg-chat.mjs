@@ -9,7 +9,7 @@ import path from 'node:path';
 import os from 'node:os';
 import termkit from 'terminal-kit';
 
-const VERSION = '0.3.1';
+const VERSION = '0.3.2';
 const term = termkit.terminal;
 
 // ---------- Settings ----------
@@ -476,6 +476,19 @@ function printMessage(msg, showContext) {
   for (const l of lines) chatPush(l);
 }
 
+function displayBucketForEvent(event, bucket) {
+  if (bucket) return bucket;
+  if (!event.origin_aro && event.to === state.agent && event.from !== state.agent) {
+    return event.from;
+  }
+  return null;
+}
+
+function shouldPrintIncoming(event, bucket) {
+  if (!state.currentTarget) return true;
+  return displayBucketForEvent(event, bucket) === state.currentTarget;
+}
+
 // ---------- SSE ----------
 
 let sseReq = null;
@@ -564,7 +577,9 @@ function handleIncoming(event) {
     updateRoomsBar();
   }
 
-  printMessage(entry, true);
+  if (shouldPrintIncoming(event, bucket)) {
+    printMessage(entry, true);
+  }
 
   if (settings.bell && !event.origin_aro && event.to === state.agent && event.from !== state.agent) {
     term.bell();
