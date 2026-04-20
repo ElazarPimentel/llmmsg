@@ -110,6 +110,39 @@ async function readThread(client, threadId) {
   return result.thread;
 }
 
+function isThreadGoneError(error) {
+  return /thread.*(not found|does not exist)/i.test(error.message);
+}
+
+async function startTurnWithResume(agent, client, mapping, input) {
+  try {
+    await client.request('turn/start', {
+      threadId: mapping.threadId,
+      input,
+    });
+    return;
+  } catch (error) {
+    if (!isThreadGoneError(error) || !mapping.cwd) {
+      throw error;
+    }
+
+    process.stdout.write('[recover] ' + agent + ': retrying after thread/resume for ' + mapping.threadId + '\n');
+    try {
+      await client.request('thread/resume', {
+        threadId: mapping.threadId,
+        cwd: mapping.cwd,
+      });
+      await client.request('turn/start', {
+        threadId: mapping.threadId,
+        input,
+      });
+      process.stdout.write('[recovered] ' + agent + ': ' + mapping.threadId + '\n');
+    } catch (retryError) {
+      throw new Error(error.message + '; recovery failed: ' + retryError.message);
+    }
+  }
+}
+
 async function registerAgent(agent, { threadId, cwd, latest } = {}) {
   const client = new CodexRpcClient({ url: APP_SERVER_URL });
   await client.connect();
@@ -177,10 +210,9 @@ async function deliverUnread(agent) {
     for (const row of rows) {
       if (row.id > maxId) maxId = row.id;
       const body = safeParse(row.body);
-      await client.request('turn/start', {
-        threadId: mapping.threadId,
-        input: [{ type: 'text', text: buildPrompt({ id: row.id, from: row.sender, to: row.recipient, tag: row.tag, re: row.re, body }), text_elements: [] }],
-      });
+      await startTurnWithResume(agent, client, mapping, [
+        { type: 'text', text: buildPrompt({ id: row.id, from: row.sender, to: row.recipient, tag: row.tag, re: row.re, body }), text_elements: [] },
+      ]);
     }
 
     setCursor.run(agent, maxId);
@@ -221,7 +253,7 @@ async function watchAgents(pollMs = 2000) {
       } catch (error) {
         const count = (staleErrors.get(agent) || 0) + 1;
         staleErrors.set(agent, count);
-        const isThreadGone = /thread.*(not found|does not exist)/i.test(error.message);
+        const isThreadGone = isThreadGoneError(error);
         if (isThreadGone || count >= 10) {
           // Suspend delivery but keep the registration — the session may restart
           // and re-register with a new thread ID. Deleting here would lose state.
