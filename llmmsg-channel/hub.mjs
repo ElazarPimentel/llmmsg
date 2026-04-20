@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '3.1';
+const VERSION = '3.2';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
@@ -81,10 +81,44 @@ for (const migration of [
   `CREATE INDEX IF NOT EXISTS idx_origin_tag ON messages(origin_tag) WHERE origin_tag IS NOT NULL`,
   `ALTER TABLE messages ADD COLUMN origin_aro TEXT`,
   `CREATE INDEX IF NOT EXISTS idx_origin_aro ON messages(origin_aro) WHERE origin_aro IS NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS hub_log (
+     id      INTEGER PRIMARY KEY AUTOINCREMENT,
+     ts      INTEGER NOT NULL,
+     level   TEXT    NOT NULL,
+     message TEXT    NOT NULL
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_hub_log_ts ON hub_log(ts)`,
 ]) {
   try { db.exec(migration); }
   catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
 }
+
+// Redirect runtime logs to SQLite (hub_log). Pre-DB startup errors still hit stderr
+// because this wrapper is installed after db is open. Fatal post-init problems
+// re-emit to stderr so systemd can surface them even if DB writes are failing.
+const stmtInsertLog = db.prepare(`INSERT INTO hub_log (ts, level, message) VALUES (?, ?, ?)`);
+function dbLog(level, args) {
+  const msg = args.map(a => {
+    if (a instanceof Error) return a.stack || a.message;
+    if (typeof a === 'string') return a;
+    try { return JSON.stringify(a); } catch { return String(a); }
+  }).join(' ');
+  try {
+    stmtInsertLog.run(Math.floor(Date.now() / 1000), level, msg);
+  } catch (err) {
+    // DB write failed — fall back to stderr so we don't lose the line silently.
+    process.stderr.write(`[hub_log write failed: ${err.message}] ${level}: ${msg}\n`);
+  }
+}
+console.log = (...args) => dbLog('info', args);
+console.error = (...args) => dbLog('error', args);
+console.warn = (...args) => dbLog('warn', args);
+
+// Periodic prune: keep last 14 days of logs.
+setInterval(() => {
+  const cutoff = Math.floor(Date.now() / 1000) - 14 * 86400;
+  try { db.prepare(`DELETE FROM hub_log WHERE ts < ?`).run(cutoff); } catch {}
+}, 3600_000);
 
 // Migrate legacy cursors: collapse last_id/delivered_id/read_id into read_id only.
 // After migration, read_id = MAX(old last_id, old delivered_id, old read_id).
@@ -312,7 +346,7 @@ function pollForDirectWrites() {
     }
     // sendToChannel already handles cursor for non-bridged agents
     // For bridged Codex agents, bridge advances cursor via /read-ack
-    if (!isCodexAgent(agent) || !hasActiveBridgeRegistration(agent)) {
+    if (!isCodexAgent(agent)) {
       stmtUpsertCursor.run(agent, maxId);
     }
   }
@@ -325,7 +359,7 @@ function sendToChannel(agent, event) {
   if (res) {
     res.write(`data: ${JSON.stringify(event)}\n\n`);
     // Don't advance cursor for bridged Codex agents — bridge handles it via /read-ack
-    if (!isCodexAgent(agent) || !hasActiveBridgeRegistration(agent)) {
+    if (!isCodexAgent(agent)) {
       stmtUpsertCursor.run(agent, event.id);
     }
     return true;
@@ -337,7 +371,7 @@ function broadcastToChannels(event, excludeSender) {
   for (const [agent, res] of channels) {
     if (agent !== excludeSender) {
       res.write(`data: ${JSON.stringify(event)}\n\n`);
-      if (!isCodexAgent(agent) || !hasActiveBridgeRegistration(agent)) {
+      if (!isCodexAgent(agent)) {
         stmtUpsertCursor.run(agent, event.id);
       }
     }
@@ -409,9 +443,16 @@ function parseBody(req) {
   });
 }
 
+// An agent is Codex-managed if either (a) its name uses the -ca- naming
+// convention, or (b) it has an entry in the bridge registrations file. The
+// registry check catches outliers like 'oid2' that predate the naming rule —
+// without this, such agents were treated as CC, the hub would push to SSE
+// (which Codex ignores) and silently advance their cursor. Result: messages
+// marked delivered that the Codex thread never saw.
 function isCodexAgent(agent) {
   const parts = agent.split('-');
-  return parts.includes('ca');
+  if (parts.includes('ca')) return true;
+  return !!loadBridgeRegistry()[agent];
 }
 
 function loadBridgeRegistry() {
@@ -489,7 +530,7 @@ const server = http.createServer(async (req, res) => {
       // stored between /register and /connect (onboarding guide, missed
       // direct sends, etc.). Cursor is advanced by sendToChannel-equivalent
       // path below. Skip for bridged Codex agents — the bridge owns cursor.
-      if (!isCodexAgent(agent) || !hasActiveBridgeRegistration(agent)) {
+      if (!isCodexAgent(agent)) {
         const unread = getUnreadMessages(agent);
         for (const msg of unread) {
           res.write(`data: ${JSON.stringify(msg)}\n\n`);
