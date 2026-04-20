@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '3.0';
+const VERSION = '3.1';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
@@ -461,11 +461,29 @@ const server = http.createServer(async (req, res) => {
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
       });
+      // TCP keepalive surfaces zombie sockets (NAT timeouts, conntrack drops) as socket errors
+      // instead of silent hangs, so req.on('close') actually fires and we evict from channels.
+      if (req.socket && typeof req.socket.setKeepAlive === 'function') {
+        req.socket.setKeepAlive(true, 15000);
+      }
       res.write(`: connected as ${agent}\n\n`);
 
       channels.set(agent, res);
       stmtUpdateLastSeen.run(agent); // refresh last_seen_at so ARO fanout keeps this agent active
       console.log(`[connect] ${agent} (${channels.size} connected)`);
+
+      // Application-level heartbeat. A ping comment every 25s keeps NAT/firewall state alive
+      // and, more importantly, makes write() fail with EPIPE on dead sockets so we close and
+      // evict them instead of leaving the channels Map pointing at a zombie response.
+      const heartbeat = setInterval(() => {
+        try {
+          res.write(`: ping ${Date.now()}\n\n`);
+        } catch {
+          // Write error — close handler will evict. Stop pinging.
+          clearInterval(heartbeat);
+          try { res.end(); } catch {}
+        }
+      }, 25000);
 
       // Deliver any unread messages so the agent catches up on anything
       // stored between /register and /connect (onboarding guide, missed
@@ -480,6 +498,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       req.on('close', () => {
+        clearInterval(heartbeat);
         // Only delete if this response is still the active one (not replaced by a newer connection)
         if (channels.get(agent) === res) {
           channels.delete(agent);

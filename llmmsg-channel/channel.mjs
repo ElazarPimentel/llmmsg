@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
 
-const VERSION = '2.1';
+const VERSION = '2.2';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_HOST = process.env.LLMMSG_HUB_HOST || '127.0.0.1';
 const HUB_URL = `http://${HUB_HOST}:${HUB_PORT}`;
@@ -352,11 +352,35 @@ function connectToHub() {
   sseAlias = agentParam; // remember the alias so manual register can pass it as old_agent
   const url = `${HUB_URL}/connect?agent=${encodeURIComponent(agentParam)}&cwd=${encodeURIComponent(AGENT_CWD)}`;
 
-  http.get(url, (res) => {
+  // Zombie-socket guard: hub pings every 25s, so 60s of silence means the stream is dead.
+  // Without this, a half-closed TCP socket leaves us "connected" forever with no push delivery
+  // and no 'end'/'error' firing (the bug that left os-whey-cc-w stranded).
+  let reconnected = false;
+  const reconnect = (reason) => {
+    if (reconnected) return;
+    reconnected = true;
+    console.error(`[llmmsg-channel] ${reason}, reconnecting in 5s...`);
+    setTimeout(connectToHub, 5000);
+  };
+
+  const clientReq = http.get(url, (res) => {
     console.error(`[llmmsg-channel] connected to hub as ${agentParam}`);
+    // TCP keepalive on the client side too, same reason as the hub.
+    if (res.socket && typeof res.socket.setKeepAlive === 'function') {
+      res.socket.setKeepAlive(true, 15000);
+    }
     let buffer = '';
+    let lastEventAt = Date.now();
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastEventAt > 60000) {
+        clearInterval(watchdog);
+        try { res.destroy(new Error('no data for 60s')); } catch {}
+        reconnect('SSE stalled (no heartbeat)');
+      }
+    }, 15000);
 
     res.on('data', (chunk) => {
+      lastEventAt = Date.now();
       buffer += chunk.toString();
       const lines = buffer.split('\n');
       buffer = lines.pop();
@@ -391,17 +415,21 @@ function connectToHub() {
     });
 
     res.on('end', () => {
-      console.error('[llmmsg-channel] hub disconnected, reconnecting in 5s...');
-      setTimeout(connectToHub, 5000);
+      clearInterval(watchdog);
+      reconnect('hub disconnected');
     });
 
     res.on('error', (err) => {
-      console.error('[llmmsg-channel] SSE error:', err.message);
-      setTimeout(connectToHub, 5000);
+      clearInterval(watchdog);
+      reconnect(`SSE error: ${err.message}`);
     });
-  }).on('error', (err) => {
-    console.error(`[llmmsg-channel] hub connection failed: ${err.message}, retrying in 5s...`);
-    setTimeout(connectToHub, 5000);
+    res.on('close', () => {
+      clearInterval(watchdog);
+      reconnect('SSE socket closed');
+    });
+  });
+  clientReq.on('error', (err) => {
+    reconnect(`hub connection failed: ${err.message}`);
   });
 }
 
