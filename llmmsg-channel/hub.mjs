@@ -244,6 +244,16 @@ const stmtAroMembersActive = db.prepare(
      AND r.last_seen_at > strftime('%s','now') - 30
    ORDER BY a.agent`
 );
+
+function activeAroMembers(aroName, excludeAgent = null) {
+  const allMembers = stmtAroMembersAll.all(aroName).map(r => r.agent).filter(a => a !== excludeAgent);
+  const recentMembers = new Set(stmtAroMembersActive.all(aroName).map(r => r.agent));
+  return allMembers.filter((agent) => {
+    if (channels.has(agent)) return true;
+    if (!recentMembers.has(agent)) return false;
+    return !isCodexAgent(agent) || hasActiveBridgeRegistration(agent);
+  });
+}
 const stmtAroList = db.prepare(`SELECT aro, agent FROM aros ORDER BY aro, agent`);
 const stmtAroJoin = db.prepare(`INSERT OR IGNORE INTO aros (aro, agent) VALUES (?, ?)`);
 const stmtAroLeave = db.prepare(`DELETE FROM aros WHERE aro = ? AND agent = ?`);
@@ -290,6 +300,35 @@ function httpPostRemote(hubUrl, path, body) {
     req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
     req.end(data);
   });
+}
+
+function httpGetRemote(hubUrl, path) {
+  return new Promise((resolve, reject) => {
+    const url = new URL(path, hubUrl);
+    const headers = {};
+    if (INBOUND_SECRET) headers['Authorization'] = `Bearer ${INBOUND_SECRET}`;
+    const req = http.request(url, { method: 'GET', headers, timeout: 5000 }, res => {
+      let out = '';
+      res.on('data', c => out += c);
+      res.on('end', () => {
+        try { resolve(JSON.parse(out)); }
+        catch { resolve({ raw: out }); }
+      });
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    req.end();
+  });
+}
+
+async function listRemoteAroOnline(hubName, hubUrl, aroName) {
+  try {
+    const result = await httpGetRemote(hubUrl, `/online?aro=${encodeURIComponent(aroName)}`);
+    const online = Array.isArray(result.online) ? result.online : [];
+    return { ok: true, hub: hubName, online };
+  } catch {
+    return { ok: false, hub: hubName, online: [] };
+  }
 }
 
 async function forwardToRemoteHub(hubName, hubUrl, payload) {
@@ -656,13 +695,16 @@ const server = http.createServer(async (req, res) => {
       for (const agent of agents) {
         if (!agent) continue;
         const existed = stmtCheckRoster.get(agent);
+        const aroChanges = stmtDeleteAroByAgent.run(agent).changes;
+        const sseConn = channels.get(agent);
         if (existed) {
           stmtUnregister.run(agent);
-          const sseConn = channels.get(agent);
-          if (sseConn) {
-            sseConn.end();
-            channels.delete(agent);
-          }
+        }
+        if (sseConn) {
+          sseConn.end();
+          channels.delete(agent);
+        }
+        if (existed || aroChanges > 0 || sseConn) {
           removed.push(agent);
           console.log(`[unregister] ${agent}`);
         }
@@ -705,22 +747,54 @@ const server = http.createServer(async (req, res) => {
       // "active" = has a live SSE connection OR was seen (heartbeat/register) in the last 30s
       if (to.startsWith('aro:')) {
         const aroName = to.slice(4);
-        const allMembers = stmtAroMembersAll.all(aroName).map(r => r.agent).filter(a => a !== from);
-        const recentMembers = new Set(stmtAroMembersActive.all(aroName).map(r => r.agent));
-        const members = allMembers.filter((a) => {
-          if (channels.has(a)) return true;
-          if (!recentMembers.has(a)) return false;
-          return !isCodexAgent(a) || hasActiveBridgeRegistration(a);
-        });
-        if (!members.length) {
+        const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
+        const originAro = `aro:${aroName}`;
+        const members = activeAroMembers(aroName, from);
+        const results = members.map(member => sendMessage(from, member, re || null, msgBody, originAro));
+
+        const remoteLookups = remoteHubEntries.length > 0
+          ? await Promise.all(remoteHubEntries.map(([name, url]) => listRemoteAroOnline(name, url, aroName)))
+          : [];
+        const remoteTargets = [];
+        const seenRemoteAgents = new Set();
+        for (const lookup of remoteLookups) {
+          if (!lookup.ok) continue;
+          const hubEntry = remoteHubEntries.find(([name]) => name === lookup.hub);
+          if (!hubEntry) continue;
+          for (const agent of lookup.online) {
+            if (agent === from || members.includes(agent) || seenRemoteAgents.has(agent)) continue;
+            seenRemoteAgents.add(agent);
+            remoteTargets.push({ agent, hubName: hubEntry[0], hubUrl: hubEntry[1] });
+          }
+        }
+        const remoteAgents = remoteTargets.map(t => t.agent).sort();
+        const remoteResults = [];
+        for (const target of remoteTargets) {
+          const localCopy = sendMessage(from, target.agent, re || null, msgBody, originAro);
+          const payload = { from, to: target.agent, re: re || null, message: msgBody, origin_site: SITE_NAME, origin_tag: localCopy.tag, origin_aro: originAro };
+          const forward = await forwardToRemoteHub(target.hubName, target.hubUrl, payload);
+          remoteResults.push({ agent: target.agent, tag: localCopy.tag, forwards: [forward] });
+        }
+
+        const remoteAccepted = remoteResults.some(r => r.forwards.some(f => f.ok || f.queued));
+        if (!members.length && !remoteAccepted) {
           res.writeHead(400);
           res.end(JSON.stringify({ error: `aro '${aroName}' has no active members (or only the sender)` }));
           return;
         }
-        const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
-        const originAro = `aro:${aroName}`;
-        const results = members.map(member => sendMessage(from, member, re || null, msgBody, originAro));
-        res.end(JSON.stringify({ ok: true, aro: aroName, members, sent: results.length, ids: results.map(r => r.id) }));
+
+        res.end(JSON.stringify({
+          ok: true,
+          aro: aroName,
+          members: members.concat(remoteAgents),
+          local_members: members,
+          remote_members: remoteAgents,
+          sent: results.length + remoteResults.length,
+          ids: results.map(r => r.id),
+          forwarded: remoteResults.length > 0,
+          remote_lookups: remoteLookups.map(r => ({ hub: r.hub, ok: r.ok, count: r.online.length })),
+          remotes: remoteResults.flatMap(r => r.forwards.map(f => ({ agent: r.agent, hub: f.hub, ok: f.ok, queued: f.queued || false }))),
+        }));
         return;
       }
 
@@ -942,7 +1016,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       const body = await parseBody(req);
-      const { from, to, re, message, origin_site, origin_tag } = body;
+      const { from, to, re, message, origin_site, origin_tag, origin_aro } = body;
       if (!from || !to || !message) {
         res.writeHead(400);
         res.end(JSON.stringify({ error: 'missing from, to, or message' }));
@@ -958,6 +1032,26 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
+      const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
+
+      if (to.startsWith('aro:')) {
+        const aroName = to.slice(4);
+        const members = activeAroMembers(aroName, from);
+        if (!members.length) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ error: `aro '${aroName}' has no active members on this site` }));
+          return;
+        }
+
+        const results = members.map(member => sendMessage(from, member, re || null, msgBody, to));
+        if (origin_tag && results[0]) {
+          stmtSetOriginTag.run(origin_tag, results[0].id);
+        }
+        console.log(`[inbound] ${from} → ${to} from site ${origin_site || 'unknown'} (origin tag: ${origin_tag || 'none'}) → local fanout ${results.length}`);
+        res.end(JSON.stringify({ ok: true, aro: aroName, members, sent: results.length, ids: results.map(r => r.id) }));
+        return;
+      }
+
       // Check if recipient is local
       const isLocal = stmtCheckRoster.get(to) || hasActiveBridgeRegistration(to);
       if (!isLocal && to !== '*') {
@@ -966,8 +1060,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
-      const result = sendMessage(from, to, re || null, msgBody);
+      const result = sendMessage(from, to, re || null, msgBody, origin_aro || null);
       // Store origin_tag for dedup
       if (origin_tag) {
         stmtSetOriginTag.run(origin_tag, result.id);
