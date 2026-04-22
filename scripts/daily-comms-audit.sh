@@ -21,7 +21,7 @@ MEDIAN=$(sqlite3 "$DB" "
   WITH agent_avgs AS (
     SELECT ROUND(AVG(LENGTH(body))) AS avg_chars
     FROM messages
-    WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+    WHERE ts > strftime('%s', 'now', '-1 day')
       AND retracted_at IS NULL
     GROUP BY sender
     ORDER BY avg_chars
@@ -37,7 +37,7 @@ AVERAGE=$(sqlite3 "$DB" "
   WITH agent_avgs AS (
     SELECT ROUND(AVG(LENGTH(body))) AS avg_chars
     FROM messages
-    WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+    WHERE ts > strftime('%s', 'now', '-1 day')
       AND retracted_at IS NULL
     GROUP BY sender
   )
@@ -84,7 +84,7 @@ sqlite3 -header -column "$DB" "
       END
     ) AS has_summary_and_message
   FROM messages
-  WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+  WHERE ts > strftime('%s', 'now', '-1 day')
     AND retracted_at IS NULL
   GROUP BY sender
   ORDER BY total_chars DESC;
@@ -99,7 +99,7 @@ sqlite3 -header -column "$DB" "
     SUM(LENGTH(body)) AS chars,
     ROUND(SUM(LENGTH(body)) / 4.0) AS est_tokens
   FROM messages
-  WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+  WHERE ts > strftime('%s', 'now', '-1 day')
     AND retracted_at IS NULL
   GROUP BY sender, recipient
   ORDER BY chars DESC
@@ -120,7 +120,7 @@ sqlite3 -header -column "$DB" "
       80
     ) AS preview
   FROM messages
-  WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+  WHERE ts > strftime('%s', 'now', '-1 day')
     AND retracted_at IS NULL
     AND LENGTH(body) > 2000
   ORDER BY LENGTH(body) DESC;
@@ -131,7 +131,7 @@ echo "--- Flagged: Duplicate summary+details pattern ---"
 sqlite3 -header -column "$DB" "
   SELECT id, sender, tag, LENGTH(body) AS chars
   FROM messages
-  WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+  WHERE ts > strftime('%s', 'now', '-1 day')
     AND retracted_at IS NULL
     AND json_valid(body)
     AND json_extract(body, '$.summary') IS NOT NULL
@@ -145,7 +145,7 @@ sqlite3 -header -column "$DB" "
   SELECT sender, COUNT(*) AS msgs, ROUND(AVG(LENGTH(body))) AS avg_chars,
     ROUND(AVG(LENGTH(body)) / $MEDIAN, 1) AS vs_median
   FROM messages
-  WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+  WHERE ts > strftime('%s', 'now', '-1 day')
     AND retracted_at IS NULL
   GROUP BY sender
   HAVING AVG(LENGTH(body)) > ($MEDIAN * 2)
@@ -157,14 +157,14 @@ echo "--- Flagged: One-off type values (used only once in 24h) ---"
 sqlite3 -header -column "$DB" "
   SELECT json_extract(body, '$.type') AS type, sender, tag
   FROM messages
-  WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+  WHERE ts > strftime('%s', 'now', '-1 day')
     AND retracted_at IS NULL
     AND json_valid(body)
     AND json_extract(body, '$.type') IS NOT NULL
     AND json_extract(body, '$.type') IN (
       SELECT json_extract(body, '$.type')
       FROM messages
-      WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+      WHERE ts > strftime('%s', 'now', '-1 day')
         AND retracted_at IS NULL
         AND json_valid(body)
         AND json_extract(body, '$.type') IS NOT NULL
@@ -179,14 +179,14 @@ echo "--- Summary ---"
 sqlite3 "$DB" "
   SELECT json_object(
     'period', '24h',
-    'total_messages', (SELECT COUNT(*) FROM messages WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER) AND retracted_at IS NULL),
-    'total_chars', (SELECT SUM(LENGTH(body)) FROM messages WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER) AND retracted_at IS NULL),
-    'est_tokens', (SELECT ROUND(SUM(LENGTH(body)) / 4.0) FROM messages WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER) AND retracted_at IS NULL),
+    'total_messages', (SELECT COUNT(*) FROM messages WHERE ts > strftime('%s', 'now', '-1 day') AND retracted_at IS NULL),
+    'total_chars', (SELECT SUM(LENGTH(body)) FROM messages WHERE ts > strftime('%s', 'now', '-1 day') AND retracted_at IS NULL),
+    'est_tokens', (SELECT ROUND(SUM(LENGTH(body)) / 4.0) FROM messages WHERE ts > strftime('%s', 'now', '-1 day') AND retracted_at IS NULL),
     'median_avg_chars', $MEDIAN,
     'agents_above_2x_median', (
       SELECT COUNT(*) FROM (
         SELECT sender FROM messages
-        WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER) AND retracted_at IS NULL
+        WHERE ts > strftime('%s', 'now', '-1 day') AND retracted_at IS NULL
         GROUP BY sender HAVING AVG(LENGTH(body)) > ($MEDIAN * 2)
       )
     )
@@ -209,7 +209,7 @@ if [[ -n "$LAST_AUDIT_TS" && "$LAST_AUDIT_TS" != "" ]]; then
           ROUND(SUM(LENGTH(body)) / 4.0) AS est_tokens,
           SUM(CASE WHEN LENGTH(body) > 2000 THEN 1 ELSE 0 END) AS over_2k
         FROM messages
-        WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+        WHERE ts > strftime('%s', 'now', '-1 day')
           AND retracted_at IS NULL
         GROUP BY sender
       ),
@@ -268,7 +268,7 @@ sqlite3 "$DB" "
       END
     )
   FROM messages
-  WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+  WHERE ts > strftime('%s', 'now', '-1 day')
     AND retracted_at IS NULL
   GROUP BY sender;
 "

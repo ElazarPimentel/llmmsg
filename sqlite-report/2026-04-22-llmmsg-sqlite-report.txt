@@ -1,0 +1,52 @@
+daily-comms-audit.sh v1.7
+Report file: /opt/llmmsg/sqlite-report/2026-04-22-llmmsg-sqlite-report.txt
+
+=== Last 24h Communications Audit ===
+Median avg chars/message: 3199.0
+Average avg chars/message: 1608.0
+
+--- Per-Agent Efficiency ---
+sender   msgs  avg_chars  max_chars  total_chars  est_tokens  replies  initiated  avg_reply_chars  avg_init_chars  over_2k  has_summary_and_details  has_summary_and_message
+-------  ----  ---------  ---------  -----------  ----------  -------  ---------  ---------------  --------------  -------  -----------------------  -----------------------
+system   3     3199.0     3199       9597         2399.0      0        3                           3199.0          3        0                        0                      
+smoke-a  3     16.0       19         48           12.0        0        3                           16.0            0        0                        0                      
+
+--- Top Conversation Pairs ---
+pair                   msgs  chars  est_tokens
+---------------------  ----  -----  ----------
+system -> elazar-test  1     3199   800.0     
+system -> smoke-a      1     3199   800.0     
+system -> smoke-b      1     3199   800.0     
+smoke-a -> smoke-b     3     48     12.0      
+
+--- Flagged: Messages over 2000 chars ---
+id  sender  recipient    tag       chars  preview                              
+--  ------  -----------  --------  -----  -------------------------------------
+1   system  smoke-a      system-1  3199   Messaging guide v2.5:                
+                                          llmmsg-channel Message Creation Guide
+                                                                               
+                                          Audience: LLM agent                  
+
+2   system  smoke-b      system-2  3199   Messaging guide v2.5:                
+                                          llmmsg-channel Message Creation Guide
+                                                                               
+                                          Audience: LLM agent                  
+
+6   system  elazar-test  system-6  3199   Messaging guide v2.5:                
+                                          llmmsg-channel Message Creation Guide
+                                                                               
+                                          Audience: LLM agent                  
+
+--- Flagged: Duplicate summary+details pattern ---
+
+--- Flagged: Agents 2x above median avg chars ---
+
+--- Flagged: One-off type values (used only once in 24h) ---
+
+--- Summary ---
+{"period":"24h","total_messages":6,"total_chars":9645,"est_tokens":2411.0,"median_avg_chars":3199.0,"agents_above_2x_median":0}
+
+--- No previous audit snapshot for comparison ---
+
+
+Audit snapshot saved (guide v2.5)

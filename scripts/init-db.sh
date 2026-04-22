@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="1.6"
+VERSION="2.0"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -15,17 +15,27 @@ sqlite3 "$DB" <<'SQL'
 PRAGMA journal_mode=WAL;
 PRAGMA busy_timeout=5000;
 
+-- messages
+-- ts              INTEGER unix epoch (no more TEXT casts)
+-- tag             generated from sender || '-' || id; no storage, no two-step insert
+-- body            plain text. If a sender passes an object, hub JSON-stringifies
+--                 it on the way in; readers always get a string and can parse if
+--                 they want.
+-- retracted_at    INTEGER unix epoch or NULL
+-- origin_tag      cross-site dedup (nullable, partial-indexed)
+-- origin_aro      'aro:<name>' when this row is part of an ARO fan-out
 CREATE TABLE messages (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts        TEXT    NOT NULL DEFAULT (strftime('%s','now')),
-    sender    TEXT    NOT NULL,
-    recipient TEXT    NOT NULL,
-    tag       TEXT    NOT NULL UNIQUE,
-    re        TEXT,
-    body      TEXT    NOT NULL,
-    retracted_at TEXT,
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts           INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    sender       TEXT    NOT NULL,
+    recipient    TEXT    NOT NULL,
+    tag          TEXT    GENERATED ALWAYS AS (sender || '-' || id) VIRTUAL,
+    re           TEXT,
+    body         TEXT    NOT NULL,
+    retracted_at INTEGER,
     retracted_by TEXT,
-    origin_tag TEXT
+    origin_tag   TEXT,
+    origin_aro   TEXT
 );
 
 CREATE TABLE cursors (
@@ -34,37 +44,37 @@ CREATE TABLE cursors (
 );
 
 CREATE TABLE roster (
-    agent         TEXT PRIMARY KEY,
-    cwd           TEXT NOT NULL,
-    registered_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
+    agent         TEXT    PRIMARY KEY,
+    cwd           TEXT    NOT NULL,
+    registered_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
     last_seen_at  INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE thread_map (
-    agent      TEXT NOT NULL,
-    cwd        TEXT NOT NULL,
-    thread_id  TEXT NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
+    agent      TEXT    NOT NULL,
+    cwd        TEXT    NOT NULL,
+    thread_id  TEXT    NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
     PRIMARY KEY (agent, cwd)
 );
 
 CREATE TABLE config (
-    key        TEXT PRIMARY KEY,
-    value      TEXT NOT NULL,
-    version    TEXT NOT NULL DEFAULT '1.0',
-    updated_at TEXT NOT NULL DEFAULT (strftime('%s','now'))
+    key        TEXT    PRIMARY KEY,
+    value      TEXT    NOT NULL,
+    version    TEXT    NOT NULL DEFAULT '1.0',
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now'))
 );
 
 CREATE TABLE audit_snapshots (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    ts         TEXT NOT NULL DEFAULT (strftime('%s','now')),
-    guide_version TEXT NOT NULL,
-    agent      TEXT NOT NULL,
-    msgs       INTEGER NOT NULL DEFAULT 0,
-    avg_chars  REAL NOT NULL DEFAULT 0,
-    total_chars INTEGER NOT NULL DEFAULT 0,
-    est_tokens REAL NOT NULL DEFAULT 0,
-    over_2k    INTEGER NOT NULL DEFAULT 0,
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts             INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    guide_version  TEXT    NOT NULL,
+    agent          TEXT    NOT NULL,
+    msgs           INTEGER NOT NULL DEFAULT 0,
+    avg_chars      REAL    NOT NULL DEFAULT 0,
+    total_chars    INTEGER NOT NULL DEFAULT 0,
+    est_tokens     REAL    NOT NULL DEFAULT 0,
+    over_2k        INTEGER NOT NULL DEFAULT 0,
     has_dup_fields INTEGER NOT NULL DEFAULT 0
 );
 
@@ -76,13 +86,23 @@ CREATE TABLE aros (
 
 CREATE TABLE outbox (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    created_at TEXT NOT NULL DEFAULT (strftime('%s','now')),
-    target_hub TEXT NOT NULL,
-    payload    TEXT NOT NULL
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    target_hub TEXT    NOT NULL,
+    payload    TEXT    NOT NULL
 );
 
-CREATE INDEX idx_recv ON messages(recipient, id);
+CREATE TABLE hub_log (
+    id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts      INTEGER NOT NULL,
+    level   TEXT    NOT NULL,
+    message TEXT    NOT NULL
+);
+
+CREATE INDEX idx_recv       ON messages(recipient, id);
 CREATE INDEX idx_origin_tag ON messages(origin_tag) WHERE origin_tag IS NOT NULL;
+CREATE INDEX idx_origin_aro ON messages(origin_aro) WHERE origin_aro IS NOT NULL;
+CREATE INDEX idx_roster_seen ON roster(last_seen_at);
+CREATE INDEX idx_hub_log_ts ON hub_log(ts);
 
 -- Seed message guide
 INSERT INTO config (key, value, version) VALUES ('message_guide',
@@ -103,13 +123,13 @@ Rules
 10. Do not resend shared context. Do not restate the request, assigned work, known paths, shown code, or prior findings.
 11. Do not paste TUI or CLI output verbatim into messages. Summarize the signal in one or two lines: what happened, what you need, what decision you want.
 12. Lead with the payload: decision, blocker, verdict, proposed fix, or next action.
-13. Plain prose by default. Structured fields only when machine-readable data is genuinely needed. No duplicate fields, no type unless a tool requires it.
+13. Plain prose by default. The hub stores body as plain text — send `message` as a string. If you pass an object it will be JSON-serialised and receivers will see a string; only do that when machine-readable data is genuinely needed.
 14. Register once per session, after a name change, or after a real not_registered error. No defensive re-registration.
 15. Keep only decision-relevant content. For reviews and audits: verdict + minimal facts, count + one critical example, proposed fix + risk. No framing, restatements, inventories, full dumps, or non-blocking commentary.
 16. Reference by location when useful, rather than pasting content.
 17. If 3 lines are enough, do not send 30.
 18. No sycophantic or zero-information messages. Do not send messages that only acknowledge, praise, or restate what the recipient already said. Every message must carry a new decision, action, or fact. Exception: short close-outs that change coordination state (approved, blocked, proceed, superseded, handed off).
-', '2.4');
+', '2.5');
 
 -- Overview
 CREATE VIEW v_overview AS
@@ -122,7 +142,6 @@ SELECT
   (SELECT COUNT(*) FROM messages WHERE recipient = '*') AS broadcasts,
   (SELECT COUNT(*) FROM messages WHERE re IS NOT NULL) AS replies;
 
--- Per-agent stats: volume, verbosity, token estimate
 CREATE VIEW v_agent_stats AS
 SELECT sender,
   COUNT(*) AS msgs,
@@ -134,7 +153,6 @@ FROM messages
 GROUP BY sender
 ORDER BY total_chars DESC;
 
--- Most concise agents
 CREATE VIEW v_most_concise AS
 SELECT sender,
   COUNT(*) AS msgs,
@@ -145,16 +163,14 @@ GROUP BY sender
 ORDER BY avg_chars ASC
 LIMIT 10;
 
--- Largest individual messages
 CREATE VIEW v_largest_messages AS
 SELECT id, sender, recipient, tag, LENGTH(body) AS chars,
   ROUND(LENGTH(body) / 4.0) AS est_tokens,
-  COALESCE(json_extract(body, '$.summary'), json_extract(body, '$.message'), json_extract(body, '$.text')) AS preview
+  substr(body, 1, 80) AS preview
 FROM messages
 ORDER BY LENGTH(body) DESC
 LIMIT 20;
 
--- Thread activity
 CREATE VIEW v_thread_activity AS
 SELECT
   COALESCE(re, tag) AS root_tag,
@@ -167,7 +183,6 @@ GROUP BY COALESCE(re, tag)
 HAVING COUNT(*) > 1
 ORDER BY messages_in_thread DESC;
 
--- Agent cursor status: how far behind each agent is
 CREATE VIEW v_agent_cursors AS
 SELECT
   c.agent,
@@ -179,18 +194,17 @@ SELECT
 FROM cursors c
 ORDER BY behind_by DESC;
 
--- Hourly volume (last 24h)
+-- Hourly volume: ts is now INTEGER so no CAST needed.
 CREATE VIEW v_hourly_volume AS
 SELECT
   strftime('%Y-%m-%d %H:00', ts, 'unixepoch', 'localtime') AS hour,
   COUNT(*) AS msgs,
   SUM(LENGTH(body)) AS total_chars
 FROM messages
-WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+WHERE ts > strftime('%s', 'now', '-1 day')
 GROUP BY hour
 ORDER BY hour DESC;
 
--- Agent pair traffic: who talks to whom most
 CREATE VIEW v_pair_traffic AS
 SELECT sender, recipient,
   COUNT(*) AS msgs,
@@ -201,17 +215,8 @@ WHERE recipient != '*'
 GROUP BY sender, recipient
 ORDER BY total_chars DESC;
 
--- Message type distribution
-CREATE VIEW v_message_types AS
-SELECT
-  json_extract(body, '$.type') AS msg_type,
-  COUNT(*) AS count,
-  ROUND(AVG(LENGTH(body))) AS avg_chars
-FROM messages
-GROUP BY msg_type
-ORDER BY count DESC;
+-- v_message_types was only meaningful when bodies were JSON-wrapped; dropped.
 
--- Daily efficiency: last 24h per-agent stats with waste flags
 CREATE VIEW v_daily_efficiency AS
 SELECT
   sender,
@@ -224,16 +229,13 @@ SELECT
   SUM(CASE WHEN re IS NULL THEN 1 ELSE 0 END) AS initiated,
   ROUND(AVG(CASE WHEN re IS NOT NULL THEN LENGTH(body) END)) AS avg_reply_chars,
   ROUND(AVG(CASE WHEN re IS NULL THEN LENGTH(body) END)) AS avg_init_chars,
-  SUM(CASE WHEN LENGTH(body) > 2000 THEN 1 ELSE 0 END) AS over_2k,
-  SUM(CASE WHEN json_extract(body, '$.summary') IS NOT NULL AND json_extract(body, '$.details') IS NOT NULL THEN 1 ELSE 0 END) AS has_summary_and_details,
-  SUM(CASE WHEN json_extract(body, '$.summary') IS NOT NULL AND json_extract(body, '$.message') IS NOT NULL THEN 1 ELSE 0 END) AS has_summary_and_message
+  SUM(CASE WHEN LENGTH(body) > 2000 THEN 1 ELSE 0 END) AS over_2k
 FROM messages
-WHERE CAST(ts AS INTEGER) > CAST(strftime('%s', 'now', '-1 day') AS INTEGER)
+WHERE ts > strftime('%s', 'now', '-1 day')
   AND retracted_at IS NULL
 GROUP BY sender
 ORDER BY total_chars DESC;
 
--- Reply ratio per agent
 CREATE VIEW v_reply_ratio AS
 SELECT
   sender,
@@ -246,9 +248,7 @@ WHERE retracted_at IS NULL
 GROUP BY sender
 ORDER BY total DESC;
 
--- Operational views used by hub.mjs. ARO fan-out collapse, online-roster filter,
--- and ARO × online-roster join live here so JS can stay thin and the same
--- definitions can be queried ad-hoc from sqlite3.
+-- Operational views used by hub.mjs.
 CREATE VIEW v_logical_messages AS
 SELECT MIN(id) AS id, sender, MIN(recipient) AS recipient, MIN(tag) AS tag,
        re, body, retracted_at, origin_aro, ts

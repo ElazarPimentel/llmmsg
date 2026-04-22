@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '3.2';
+const VERSION = '4.0';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
@@ -203,10 +203,13 @@ function safeParse(str) {
 }
 
 // Prepared statements
+// tag is a GENERATED column (sender || '-' || id) — never written, returned
+// by RETURNING. body is plain text; if a sender passes an object we stringify
+// it in normalizeBody before this INSERT runs.
 const stmtInsertMsg = db.prepare(
-  `INSERT INTO messages (sender, recipient, tag, re, body, origin_aro) VALUES (?, ?, '_pending', ?, ?, ?) RETURNING id`
+  `INSERT INTO messages (sender, recipient, re, body, origin_aro)
+   VALUES (?, ?, ?, ?, ?) RETURNING id, tag`
 );
-const stmtUpdateTag = db.prepare(`UPDATE messages SET tag = ? WHERE id = ?`);
 const stmtMessagesSince = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, origin_aro FROM messages
    WHERE (recipient = ? OR recipient = '*') AND id > ? AND retracted_at IS NULL ORDER BY id`
@@ -420,7 +423,7 @@ function pollForDirectWrites() {
     let maxId = cursorId;
     for (const r of rows) {
       if (r.id > maxId) maxId = r.id;
-      const event = { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
+      const event = { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
       sendToChannel(agent, event);
     }
     // sendToChannel already handles cursor for non-bridged agents
@@ -457,17 +460,35 @@ function broadcastToChannels(event, excludeSender) {
   }
 }
 
-// Send message and push to connected channels.
-// originAro (optional) is the aro:X target the sender asked for; stored on
-// the per-recipient row so the TUI/agents can reconstruct room attribution
-// for ARO fanout messages (which otherwise look like per-member DMs).
-const sendMessage = db.transaction((sender, recipient, reTag, body, originAro = null) => {
-  const row = stmtInsertMsg.get(sender, recipient, reTag || null, body, originAro);
-  const id = row.id;
-  const tag = `${sender}-${id}`;
-  stmtUpdateTag.run(tag, id);
+// Normalise a POST /send `message` field into a plain text body.
+// - string stays as-is
+// - single-key `{message: "..."}` wrapper unwraps to `"..."`
+// - anything else is JSON.stringify'd and stored as text
+// Clients always see body as a string and can parse it themselves if needed.
+function normalizeBody(raw) {
+  if (raw == null) return '';
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'object') {
+    const keys = Object.keys(raw);
+    if (keys.length === 1 && keys[0] === 'message' && typeof raw.message === 'string') {
+      return raw.message;
+    }
+    return JSON.stringify(raw);
+  }
+  return String(raw);
+}
 
-  const event = { id, from: sender, to: recipient, tag, re: reTag || null, body: safeParse(body), origin_aro: originAro || null };
+// Send message and push to connected channels. originAro (optional) is the
+// aro:X target the sender asked for; stored on the per-recipient row so the
+// TUI/agents can reconstruct room attribution for ARO fanout messages.
+const sendMessage = db.transaction((sender, recipient, reTag, body, originAro = null) => {
+  const row = stmtInsertMsg.get(sender, recipient, reTag || null, body, originAro || null);
+  const { id, tag } = row;
+
+  const event = {
+    id, from: sender, to: recipient, tag, re: reTag || null,
+    body, origin_aro: originAro || null,
+  };
 
   if (recipient === '*') {
     broadcastToChannels(event, sender);
@@ -486,7 +507,7 @@ function readMessages(agent) {
   let maxId = cursorId;
   const messages = rows.map(r => {
     if (r.id > maxId) maxId = r.id;
-    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
+    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
   });
 
   if (maxId > cursorId) {
@@ -500,7 +521,7 @@ function getUnreadMessages(agent) {
   const cursorRow = stmtGetCursor.get(agent);
   const cursorId = cursorRow ? cursorRow.read_id : 0;
   return stmtMessagesSince.all(agent, cursorId).map((r) => {
-    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
+    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
   });
 }
 
@@ -679,8 +700,8 @@ const server = http.createServer(async (req, res) => {
         // /register below or /connect below) delivers it when SSE attaches.
         const guideRow = stmtGetConfig.get('message_guide');
         if (guideRow && guideRow.value) {
-          const guideBody = JSON.stringify({ message: `Messaging guide v${guideRow.version}:\n${guideRow.value}` });
-          try { sendMessage('system', agent, null, guideBody); } catch {}
+          const guideText = `Messaging guide v${guideRow.version}:\n${guideRow.value}`;
+          try { sendMessage('system', agent, null, guideText); } catch {}
         }
       }
 
@@ -787,7 +808,7 @@ const server = http.createServer(async (req, res) => {
       // "active" = has a live SSE connection OR was seen (heartbeat/register) in the last 30s
       if (to.startsWith('aro:')) {
         const aroName = to.slice(4);
-        const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
+        const msgBody = normalizeBody(message);
         const originAro = `aro:${aroName}`;
         const members = activeAroMembers(aroName, from);
         const results = members.map(member => sendMessage(from, member, re || null, msgBody, originAro));
@@ -845,7 +866,7 @@ const server = http.createServer(async (req, res) => {
         if (!localKnown) {
           // Recipient not local — try remote hubs
           if (remoteHubEntries.length > 0) {
-            const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
+            const msgBody = normalizeBody(message);
             const result = sendMessage(from, to, re || null, msgBody);
             const payload = { from, to, re: re || null, message: msgBody, origin_site: SITE_NAME, origin_tag: result.tag };
             const forwards = await Promise.all(
@@ -865,7 +886,7 @@ const server = http.createServer(async (req, res) => {
         // currently offline; hub/bridge cursors deliver backlog on reconnect.
       }
 
-      const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
+      const msgBody = normalizeBody(message);
       const result = sendMessage(from, to, re || null, msgBody);
       res.end(JSON.stringify(result));
       return;
@@ -928,7 +949,7 @@ const server = http.createServer(async (req, res) => {
       const rows = stmtThread.all(tag);
       const messages = rows.map(r => {
         if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null };
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
       });
       res.end(JSON.stringify(messages));
       return;
@@ -939,7 +960,7 @@ const server = http.createServer(async (req, res) => {
       if (!text) { res.writeHead(400); res.end(JSON.stringify({ error: 'missing q' })); return; }
       const rows = stmtSearch.all(`%${text}%`);
       const messages = rows.map(r => {
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
       });
       res.end(JSON.stringify(messages));
       return;
@@ -950,8 +971,7 @@ const server = http.createServer(async (req, res) => {
       const rows = stmtLog.all(limit);
       const messages = rows.map(r => {
         if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null };
-        const body = safeParse(r.body);
-        const preview = typeof body === 'object' ? (body.summary || body.message || JSON.stringify(body)).slice(0, 120) : String(body).slice(0, 120);
+        const preview = (r.body || '').slice(0, 120);
         return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, preview, origin_aro: r.origin_aro || null };
       });
       res.end(JSON.stringify(messages));
@@ -972,7 +992,7 @@ const server = http.createServer(async (req, res) => {
       }
       const messages = rows.map(r => {
         if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null };
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: safeParse(r.body), origin_aro: r.origin_aro || null };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
       });
       res.end(JSON.stringify(messages));
       return;
@@ -1025,9 +1045,20 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && path === '/aro/join') {
       const body = await parseBody(req);
-      const aro = (body.aro || '').toLowerCase();
+      const aro = (body.aro || '').toLowerCase().replace(/^aro:/, '');
       const agent = (body.agent || '').toLowerCase();
       if (!aro || !agent) { res.writeHead(400); res.end(JSON.stringify({ error: 'missing aro or agent' })); return; }
+      // Reject ARO names that collide with existing agent names — these are
+      // almost always a bug from client code stripping a suffix and round-
+      // tripping the agent name as an ARO. Prevents oid2/sh/llmmsg-style
+      // garbage rows reappearing.
+      if (stmtCheckRoster.get(aro)) {
+        res.writeHead(400);
+        res.end(JSON.stringify({
+          error: `ARO name '${aro}' collides with an existing agent; pick a different name`,
+        }));
+        return;
+      }
       stmtAroJoin.run(aro, agent);
       res.end(JSON.stringify({ ok: true, aro, agent }));
       return;
@@ -1093,7 +1124,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      const msgBody = typeof message === 'string' ? message : JSON.stringify(message);
+      const msgBody = normalizeBody(message);
 
       if (to.startsWith('aro:')) {
         const aroName = to.slice(4);
