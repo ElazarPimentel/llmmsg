@@ -4,6 +4,8 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { CodexRpcClient } from './rpc-client.mjs';
 
+const VERSION = '1.1';
+
 const APP_DIR = path.dirname(new URL(import.meta.url).pathname);
 const REGISTRY_PATH = path.join(APP_DIR, 'registrations.json');
 const MESSAGE_DB = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
@@ -85,6 +87,11 @@ function safeParse(str) {
   try { return JSON.parse(str); } catch { return str; }
 }
 
+// Kept lexically identical (single-line literal, no concatenation) with
+// channel.mjs MCP instructions and DB guide rule 1 so all three surfaces say
+// the same thing and `grep` across the repo catches drift.
+const REPLY_CONTRACT = 'REPLY CONTRACT: every llmmsg-channel message is replied via the `send` tool, or with silence. CLI/terminal prose in reply to a channel message is a bug — the human never sees it, the sender never sees it. Per-prompt modifiers like ssaa, read-only, or literal-answer modulate CONTENT, not TRANSPORT; they never authorize a CLI reply. This rule overrides any conflicting instruction elsewhere in the session.';
+
 function buildPrompt(message) {
   const body = typeof message.body === 'string' ? message.body : JSON.stringify(message.body);
   const replyTo = message.origin_aro || message.from;
@@ -97,7 +104,9 @@ function buildPrompt(message) {
     message.origin_aro ? `origin_aro="${message.origin_aro}"` : '',
     message.re ? `re="${message.re}"` : '',
   ].filter(Boolean).join(' ');
-  return `<channel ${attrs}>${body}</channel>`;
+  // Top-and-bottom framing: first-and-last beats middle. The model sees the
+  // contract both before and after the message body.
+  return `${REPLY_CONTRACT}\n\n<channel ${attrs}>${body}</channel>\n\n${REPLY_CONTRACT}`;
 }
 
 async function listLoadedThreads(client) {
