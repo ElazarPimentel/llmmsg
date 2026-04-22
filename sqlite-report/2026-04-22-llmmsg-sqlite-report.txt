@@ -2,51 +2,359 @@ daily-comms-audit.sh v1.7
 Report file: /opt/llmmsg/sqlite-report/2026-04-22-llmmsg-sqlite-report.txt
 
 === Last 24h Communications Audit ===
-Median avg chars/message: 3199.0
-Average avg chars/message: 1608.0
+Median avg chars/message: 537.0
+Average avg chars/message: 822.0
 
 --- Per-Agent Efficiency ---
-sender   msgs  avg_chars  max_chars  total_chars  est_tokens  replies  initiated  avg_reply_chars  avg_init_chars  over_2k  has_summary_and_details  has_summary_and_message
--------  ----  ---------  ---------  -----------  ----------  -------  ---------  ---------------  --------------  -------  -----------------------  -----------------------
-system   3     3199.0     3199       9597         2399.0      0        3                           3199.0          3        0                        0                      
-smoke-a  3     16.0       19         48           12.0        0        3                           16.0            0        0                        0                      
+sender             msgs  avg_chars  max_chars  total_chars  est_tokens  replies  initiated  avg_reply_chars  avg_init_chars  over_2k  has_summary_and_details  has_summary_and_message
+-----------------  ----  ---------  ---------  -----------  ----------  -------  ---------  ---------------  --------------  -------  -----------------------  -----------------------
+pluto-pm-cc-w      57    2766.0     8047       157665       39416.0     54       3          2819.0           1809.0          36       0                        0                      
+pluto-db-cc-w      60    1870.0     13136      112191       28048.0     60       0          1870.0                           15       0                        0                      
+mars-pm-cc-w       298   335.0      2432       99790        24948.0     293      5          338.0            138.0           6        0                        0                      
+mars-coder-cc-w    172   561.0      3982       96576        24144.0     168      4          570.0            208.0           6        0                        0                      
+mars-db-cc-w       281   316.0      1344       88853        22213.0     274      7          319.0            202.0           0        0                        0                      
+pluto-coder-cc-w   42    1692.0     8936       71052        17763.0     42       0          1692.0                           9        0                        0                      
+mars-audit-ca-w    385   165.0      1134       63493        15873.0     381      4          166.0            54.0            0        0                        0                      
+llmmsg-cc          110   576.0      1640       63349        15837.0     81       29         573.0            585.0           0        0                        0                      
+system             28    2044.0     3199       57239        14310.0     0        28                          2044.0          17       0                        0                      
+elazar-whey-gui-w  161   324.0      2014       52233        13058.0     0        161                         324.0           4        0                        0                      
+sh-cc-w            54    537.0      1255       28974        7244.0      51       3          565.0            49.0            0        0                        0                      
+llmmsg-ca          64    290.0      553        18565        4641.0      61       3          293.0            240.0           0        0                        0                      
+smoke-a            3     16.0       19         48           12.0        0        3                           16.0            0        0                        0                      
+route-test-sender  3     13.0       17         39           10.0        2        1          11.0             17.0            0        0                        0                      
 
 --- Top Conversation Pairs ---
-pair                   msgs  chars  est_tokens
----------------------  ----  -----  ----------
-system -> elazar-test  1     3199   800.0     
-system -> smoke-a      1     3199   800.0     
-system -> smoke-b      1     3199   800.0     
-smoke-a -> smoke-b     3     48     12.0      
+pair                                msgs  chars  est_tokens
+----------------------------------  ----  -----  ----------
+pluto-pm-cc-w -> elazar-whey-gui-w  11    27204  6801.0    
+pluto-pm-cc-w -> pluto-coder-cc-w   11    27204  6801.0    
+pluto-pm-cc-w -> pluto-db-cc-w      11    27204  6801.0    
+pluto-pm-cc-w -> mars-coder-cc-w    8     25351  6338.0    
+pluto-pm-cc-w -> mars-db-cc-w       8     25351  6338.0    
+pluto-pm-cc-w -> mars-pm-cc-w       8     25351  6338.0    
+pluto-db-cc-w -> elazar-whey-gui-w  11    25284  6321.0    
+pluto-db-cc-w -> pluto-coder-cc-w   11    25284  6321.0    
 
 --- Flagged: Messages over 2000 chars ---
-id  sender  recipient    tag       chars  preview                              
---  ------  -----------  --------  -----  -------------------------------------
-1   system  smoke-a      system-1  3199   Messaging guide v2.5:                
-                                          llmmsg-channel Message Creation Guide
-                                                                               
-                                          Audience: LLM agent                  
+id    sender             recipient          tag                    chars  preview                                                                         
+----  -----------------  -----------------  ---------------------  -----  --------------------------------------------------------------------------------
+1311  pluto-db-cc-w      elazar-whey-gui-w  pluto-db-cc-w-1311     13136  DB half (g-l) below. Read-only discovery; no writes.                            
+                                                                                                                                                          
+                                                                          ==========================                                                      
 
-2   system  smoke-b      system-2  3199   Messaging guide v2.5:                
-                                          llmmsg-channel Message Creation Guide
-                                                                               
-                                          Audience: LLM agent                  
+1312  pluto-db-cc-w      pluto-coder-cc-w   pluto-db-cc-w-1312     13136  DB half (g-l) below. Read-only discovery; no writes.                            
+                                                                                                                                                          
+                                                                          ==========================                                                      
 
-6   system  elazar-test  system-6  3199   Messaging guide v2.5:                
-                                          llmmsg-channel Message Creation Guide
-                                                                               
-                                          Audience: LLM agent                  
+1313  pluto-db-cc-w      pluto-pm-cc-w      pluto-db-cc-w-1313     13136  DB half (g-l) below. Read-only discovery; no writes.                            
+                                                                                                                                                          
+                                                                          ==========================                                                      
+
+1305  pluto-coder-cc-w   elazar-whey-gui-w  pluto-coder-cc-w-1305  8936   done: (a)-(f) code flow. Dossier below.                                         
+                                                                                                                                                          
+                                                                          # Pluto user-provisioning & login-reque                                         
+
+1306  pluto-coder-cc-w   pluto-db-cc-w      pluto-coder-cc-w-1306  8936   done: (a)-(f) code flow. Dossier below.                                         
+                                                                                                                                                          
+                                                                          # Pluto user-provisioning & login-reque                                         
+
+1307  pluto-coder-cc-w   pluto-pm-cc-w      pluto-coder-cc-w-1307  8936   done: (a)-(f) code flow. Dossier below.                                         
+                                                                                                                                                          
+                                                                          # Pluto user-provisioning & login-reque                                         
+
+1416  pluto-pm-cc-w      elazar-whey-gui-w  pluto-pm-cc-w-1416     8047   slot 60 (pluto-pm-cc-w). Alpha order of aro members: mars-coder=10, mars-db=20, 
+
+1417  pluto-pm-cc-w      mars-coder-cc-w    pluto-pm-cc-w-1417     8047   slot 60 (pluto-pm-cc-w). Alpha order of aro members: mars-coder=10, mars-db=20, 
+
+1418  pluto-pm-cc-w      mars-db-cc-w       pluto-pm-cc-w-1418     8047   slot 60 (pluto-pm-cc-w). Alpha order of aro members: mars-coder=10, mars-db=20, 
+
+1419  pluto-pm-cc-w      mars-pm-cc-w       pluto-pm-cc-w-1419     8047   slot 60 (pluto-pm-cc-w). Alpha order of aro members: mars-coder=10, mars-db=20, 
+
+1420  pluto-pm-cc-w      pluto-coder-cc-w   pluto-pm-cc-w-1420     8047   slot 60 (pluto-pm-cc-w). Alpha order of aro members: mars-coder=10, mars-db=20, 
+
+1421  pluto-pm-cc-w      pluto-db-cc-w      pluto-pm-cc-w-1421     8047   slot 60 (pluto-pm-cc-w). Alpha order of aro members: mars-coder=10, mars-db=20, 
+
+1440  pluto-pm-cc-w      elazar-whey-gui-w  pluto-pm-cc-w-1440     4259   slot 60 — file-anchored version (my prior dossier tag 1416 was sent pre-pivot; s
+
+1441  pluto-pm-cc-w      mars-coder-cc-w    pluto-pm-cc-w-1441     4259   slot 60 — file-anchored version (my prior dossier tag 1416 was sent pre-pivot; s
+
+1442  pluto-pm-cc-w      mars-db-cc-w       pluto-pm-cc-w-1442     4259   slot 60 — file-anchored version (my prior dossier tag 1416 was sent pre-pivot; s
+
+1443  pluto-pm-cc-w      mars-pm-cc-w       pluto-pm-cc-w-1443     4259   slot 60 — file-anchored version (my prior dossier tag 1416 was sent pre-pivot; s
+
+1444  pluto-pm-cc-w      pluto-coder-cc-w   pluto-pm-cc-w-1444     4259   slot 60 — file-anchored version (my prior dossier tag 1416 was sent pre-pivot; s
+
+1445  pluto-pm-cc-w      pluto-db-cc-w      pluto-pm-cc-w-1445     4259   slot 60 — file-anchored version (my prior dossier tag 1416 was sent pre-pivot; s
+
+1566  mars-coder-cc-w    elazar-whey-gui-w  mars-coder-cc-w-1566   3982   mars-coder (slot 10) — implementation plan. Incorporating Pluto team input. Post
+
+1567  mars-coder-cc-w    mars-db-cc-w       mars-coder-cc-w-1567   3982   mars-coder (slot 10) — implementation plan. Incorporating Pluto team input. Post
+
+1568  mars-coder-cc-w    mars-pm-cc-w       mars-coder-cc-w-1568   3982   mars-coder (slot 10) — implementation plan. Incorporating Pluto team input. Post
+
+1569  mars-coder-cc-w    pluto-coder-cc-w   mars-coder-cc-w-1569   3982   mars-coder (slot 10) — implementation plan. Incorporating Pluto team input. Post
+
+1570  mars-coder-cc-w    pluto-db-cc-w      mars-coder-cc-w-1570   3982   mars-coder (slot 10) — implementation plan. Incorporating Pluto team input. Post
+
+1571  mars-coder-cc-w    pluto-pm-cc-w      mars-coder-cc-w-1571   3982   mars-coder (slot 10) — implementation plan. Incorporating Pluto team input. Post
+
+1559  pluto-pm-cc-w      elazar-whey-gui-w  pluto-pm-cc-w-1559     3900   mars-pm — answers:                                                              
+                                                                                                                                                          
+                                                                          (a) No. Pluto does not today email non-gmail users asking th                    
+
+1560  pluto-pm-cc-w      mars-coder-cc-w    pluto-pm-cc-w-1560     3900   mars-pm — answers:                                                              
+                                                                                                                                                          
+                                                                          (a) No. Pluto does not today email non-gmail users asking th                    
+
+1561  pluto-pm-cc-w      mars-db-cc-w       pluto-pm-cc-w-1561     3900   mars-pm — answers:                                                              
+                                                                                                                                                          
+                                                                          (a) No. Pluto does not today email non-gmail users asking th                    
+
+1562  pluto-pm-cc-w      mars-pm-cc-w       pluto-pm-cc-w-1562     3900   mars-pm — answers:                                                              
+                                                                                                                                                          
+                                                                          (a) No. Pluto does not today email non-gmail users asking th                    
+
+1563  pluto-pm-cc-w      pluto-coder-cc-w   pluto-pm-cc-w-1563     3900   mars-pm — answers:                                                              
+                                                                                                                                                          
+                                                                          (a) No. Pluto does not today email non-gmail users asking th                    
+
+1564  pluto-pm-cc-w      pluto-db-cc-w      pluto-pm-cc-w-1564     3900   mars-pm — answers:                                                              
+                                                                                                                                                          
+                                                                          (a) No. Pluto does not today email non-gmail users asking th                    
+
+1510  pluto-db-cc-w      elazar-whey-gui-w  pluto-db-cc-w-1510     3527   Pluto DB perspective — what I'd do differently if starting from scratch (Mars sh
+
+1511  pluto-db-cc-w      mars-coder-cc-w    pluto-db-cc-w-1511     3527   Pluto DB perspective — what I'd do differently if starting from scratch (Mars sh
+
+1512  pluto-db-cc-w      mars-db-cc-w       pluto-db-cc-w-1512     3527   Pluto DB perspective — what I'd do differently if starting from scratch (Mars sh
+
+1513  pluto-db-cc-w      mars-pm-cc-w       pluto-db-cc-w-1513     3527   Pluto DB perspective — what I'd do differently if starting from scratch (Mars sh
+
+1514  pluto-db-cc-w      pluto-coder-cc-w   pluto-db-cc-w-1514     3527   Pluto DB perspective — what I'd do differently if starting from scratch (Mars sh
+
+1515  pluto-db-cc-w      pluto-pm-cc-w      pluto-db-cc-w-1515     3527   Pluto DB perspective — what I'd do differently if starting from scratch (Mars sh
+
+1     system             smoke-a            system-1               3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+2     system             smoke-b            system-2               3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+6     system             elazar-test        system-6               3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+7     system             mars-pm-cc-w       system-7               3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+8     system             mars-coder-cc-w    system-8               3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+9     system             mars-db-cc-w       system-9               3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+10    system             mars-audit-ca-w    system-10              3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+11    system             llmmsg-ca          system-11              3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+12    system             llmmsg-cc          system-12              3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+13    system             elazar-whey-gui-w  system-13              3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+685   system             route-test-sender  system-685             3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+686   system             route-test-a       system-686             3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+786   system             pluto-pm-cc-w      system-786             3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+787   system             pluto-coder-cc-w   system-787             3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+788   system             pluto-db-cc-w      system-788             3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+789   system             pluto-audit-ca-w   system-789             3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+794   system             sh-cc-w            system-794             3199   Messaging guide v2.5:                                                           
+                                                                          llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                          
+                                                                          Audience: LLM agent                                                             
+
+1503  pluto-pm-cc-w      elazar-whey-gui-w  pluto-pm-cc-w-1503     3130   ack. My "if starting from scratch" list for Mars to consider (pluto-coder + plut
+
+1504  pluto-pm-cc-w      mars-coder-cc-w    pluto-pm-cc-w-1504     3130   ack. My "if starting from scratch" list for Mars to consider (pluto-coder + plut
+
+1505  pluto-pm-cc-w      mars-db-cc-w       pluto-pm-cc-w-1505     3130   ack. My "if starting from scratch" list for Mars to consider (pluto-coder + plut
+
+1506  pluto-pm-cc-w      mars-pm-cc-w       pluto-pm-cc-w-1506     3130   ack. My "if starting from scratch" list for Mars to consider (pluto-coder + plut
+
+1507  pluto-pm-cc-w      pluto-coder-cc-w   pluto-pm-cc-w-1507     3130   ack. My "if starting from scratch" list for Mars to consider (pluto-coder + plut
+
+1508  pluto-pm-cc-w      pluto-db-cc-w      pluto-pm-cc-w-1508     3130   ack. My "if starting from scratch" list for Mars to consider (pluto-coder + plut
+
+1535  pluto-pm-cc-w      elazar-whey-gui-w  pluto-pm-cc-w-1535     3050   ack + correction to my earlier item 1: pluto-coder is right — submitAccessReques
+
+1536  pluto-pm-cc-w      mars-coder-cc-w    pluto-pm-cc-w-1536     3050   ack + correction to my earlier item 1: pluto-coder is right — submitAccessReques
+
+1537  pluto-pm-cc-w      mars-db-cc-w       pluto-pm-cc-w-1537     3050   ack + correction to my earlier item 1: pluto-coder is right — submitAccessReques
+
+1538  pluto-pm-cc-w      mars-pm-cc-w       pluto-pm-cc-w-1538     3050   ack + correction to my earlier item 1: pluto-coder is right — submitAccessReques
+
+1539  pluto-pm-cc-w      pluto-coder-cc-w   pluto-pm-cc-w-1539     3050   ack + correction to my earlier item 1: pluto-coder is right — submitAccessReques
+
+1540  pluto-pm-cc-w      pluto-db-cc-w      pluto-pm-cc-w-1540     3050   ack + correction to my earlier item 1: pluto-coder is right — submitAccessReques
+
+1497  pluto-coder-cc-w   elazar-whey-gui-w  pluto-coder-cc-w-1497  2729   pluto-coder-cc-w: "from-scratch improvements" offer — things I'd change in Pluto
+
+1498  pluto-coder-cc-w   mars-coder-cc-w    pluto-coder-cc-w-1498  2729   pluto-coder-cc-w: "from-scratch improvements" offer — things I'd change in Pluto
+
+1499  pluto-coder-cc-w   mars-db-cc-w       pluto-coder-cc-w-1499  2729   pluto-coder-cc-w: "from-scratch improvements" offer — things I'd change in Pluto
+
+1500  pluto-coder-cc-w   mars-pm-cc-w       pluto-coder-cc-w-1500  2729   pluto-coder-cc-w: "from-scratch improvements" offer — things I'd change in Pluto
+
+1501  pluto-coder-cc-w   pluto-db-cc-w      pluto-coder-cc-w-1501  2729   pluto-coder-cc-w: "from-scratch improvements" offer — things I'd change in Pluto
+
+1502  pluto-coder-cc-w   pluto-pm-cc-w      pluto-coder-cc-w-1502  2729   pluto-coder-cc-w: "from-scratch improvements" offer — things I'd change in Pluto
+
+1553  pluto-db-cc-w      elazar-whey-gui-w  pluto-db-cc-w-1553     2527   pluto-db adds to the consolidated list (my full 10 are in tag pluto-db-cc-w-1510
+
+1554  pluto-db-cc-w      mars-coder-cc-w    pluto-db-cc-w-1554     2527   pluto-db adds to the consolidated list (my full 10 are in tag pluto-db-cc-w-1510
+
+1555  pluto-db-cc-w      mars-db-cc-w       pluto-db-cc-w-1555     2527   pluto-db adds to the consolidated list (my full 10 are in tag pluto-db-cc-w-1510
+
+1556  pluto-db-cc-w      mars-pm-cc-w       pluto-db-cc-w-1556     2527   pluto-db adds to the consolidated list (my full 10 are in tag pluto-db-cc-w-1510
+
+1557  pluto-db-cc-w      pluto-coder-cc-w   pluto-db-cc-w-1557     2527   pluto-db adds to the consolidated list (my full 10 are in tag pluto-db-cc-w-1510
+
+1558  pluto-db-cc-w      pluto-pm-cc-w      pluto-db-cc-w-1558     2527   pluto-db adds to the consolidated list (my full 10 are in tag pluto-db-cc-w-1510
+
+1619  mars-pm-cc-w       elazar-whey-gui-w  mars-pm-cc-w-1619      2432   mars-pm verdict: +1 go with amendments. Addressing pluto-pm's 2 blockers + foldi
+
+1620  mars-pm-cc-w       mars-coder-cc-w    mars-pm-cc-w-1620      2432   mars-pm verdict: +1 go with amendments. Addressing pluto-pm's 2 blockers + foldi
+
+1621  mars-pm-cc-w       mars-db-cc-w       mars-pm-cc-w-1621      2432   mars-pm verdict: +1 go with amendments. Addressing pluto-pm's 2 blockers + foldi
+
+1622  mars-pm-cc-w       pluto-coder-cc-w   mars-pm-cc-w-1622      2432   mars-pm verdict: +1 go with amendments. Addressing pluto-pm's 2 blockers + foldi
+
+1623  mars-pm-cc-w       pluto-db-cc-w      mars-pm-cc-w-1623      2432   mars-pm verdict: +1 go with amendments. Addressing pluto-pm's 2 blockers + foldi
+
+1624  mars-pm-cc-w       pluto-pm-cc-w      mars-pm-cc-w-1624      2432   mars-pm verdict: +1 go with amendments. Addressing pluto-pm's 2 blockers + foldi
+
+1590  pluto-pm-cc-w      elazar-whey-gui-w  pluto-pm-cc-w-1590     2414   review: block on 2 items, comments on 3 more.                                   
+                                                                                                                                                          
+                                                                          BLOCKERS:                                                                       
+                                                                                                                                                          
+                                                                          1. Phase is missing El                                                          
+
+1591  pluto-pm-cc-w      mars-coder-cc-w    pluto-pm-cc-w-1591     2414   review: block on 2 items, comments on 3 more.                                   
+                                                                                                                                                          
+                                                                          BLOCKERS:                                                                       
+                                                                                                                                                          
+                                                                          1. Phase is missing El                                                          
+
+1592  pluto-pm-cc-w      mars-db-cc-w       pluto-pm-cc-w-1592     2414   review: block on 2 items, comments on 3 more.                                   
+                                                                                                                                                          
+                                                                          BLOCKERS:                                                                       
+                                                                                                                                                          
+                                                                          1. Phase is missing El                                                          
+
+1593  pluto-pm-cc-w      mars-pm-cc-w       pluto-pm-cc-w-1593     2414   review: block on 2 items, comments on 3 more.                                   
+                                                                                                                                                          
+                                                                          BLOCKERS:                                                                       
+                                                                                                                                                          
+                                                                          1. Phase is missing El                                                          
+
+1594  pluto-pm-cc-w      pluto-coder-cc-w   pluto-pm-cc-w-1594     2414   review: block on 2 items, comments on 3 more.                                   
+                                                                                                                                                          
+                                                                          BLOCKERS:                                                                       
+                                                                                                                                                          
+                                                                          1. Phase is missing El                                                          
+
+1595  pluto-pm-cc-w      pluto-db-cc-w      pluto-pm-cc-w-1595     2414   review: block on 2 items, comments on 3 more.                                   
+                                                                                                                                                          
+                                                                          BLOCKERS:                                                                       
+                                                                                                                                                          
+                                                                          1. Phase is missing El                                                          
+
+821   elazar-whey-gui-w  mars-audit-ca-w    elazar-whey-gui-w-821  2014   I paste here a conversation with PM, there are some issues: 1) is the default to
+
+822   elazar-whey-gui-w  mars-coder-cc-w    elazar-whey-gui-w-822  2014   I paste here a conversation with PM, there are some issues: 1) is the default to
+
+823   elazar-whey-gui-w  mars-db-cc-w       elazar-whey-gui-w-823  2014   I paste here a conversation with PM, there are some issues: 1) is the default to
+
+824   elazar-whey-gui-w  mars-pm-cc-w       elazar-whey-gui-w-824  2014   I paste here a conversation with PM, there are some issues: 1) is the default to
 
 --- Flagged: Duplicate summary+details pattern ---
 
 --- Flagged: Agents 2x above median avg chars ---
+sender            msgs  avg_chars  vs_median
+----------------  ----  ---------  ---------
+pluto-pm-cc-w     57    2766.0     5.2      
+system            28    2044.0     3.8      
+pluto-db-cc-w     60    1870.0     3.5      
+pluto-coder-cc-w  42    1692.0     3.2      
 
 --- Flagged: One-off type values (used only once in 24h) ---
 
 --- Summary ---
-{"period":"24h","total_messages":6,"total_chars":9645,"est_tokens":2411.0,"median_avg_chars":3199.0,"agents_above_2x_median":0}
+{"period":"24h","total_messages":1718,"total_chars":910067,"est_tokens":227517.0,"median_avg_chars":537.0,"agents_above_2x_median":4}
 
---- No previous audit snapshot for comparison ---
+--- Comparison vs Last Audit (2026-04-22 00:37:00, guide v2.5) ---
+agent              msgs_now  msgs_prev  msgs_delta  avg_now  avg_prev  avg_delta  tok_now  tok_prev  tok_delta  big_now  big_prev
+-----------------  --------  ---------  ----------  -------  --------  ---------  -------  --------  ---------  -------  --------
+pluto-pm-cc-w      57        0          57          2766.0   0         2766.0     39416.0  0         39416.0    36       0       
+pluto-db-cc-w      60        0          60          1870.0   0         1870.0     28048.0  0         28048.0    15       0       
+mars-pm-cc-w       298       0          298         335.0    0         335.0      24948.0  0         24948.0    6        0       
+mars-coder-cc-w    172       0          172         561.0    0         561.0      24144.0  0         24144.0    6        0       
+mars-db-cc-w       281       0          281         316.0    0         316.0      22213.0  0         22213.0    0        0       
+pluto-coder-cc-w   42        0          42          1692.0   0         1692.0     17763.0  0         17763.0    9        0       
+mars-audit-ca-w    385       0          385         165.0    0         165.0      15873.0  0         15873.0    0        0       
+llmmsg-cc          110       0          110         576.0    0         576.0      15837.0  0         15837.0    0        0       
+elazar-whey-gui-w  161       0          161         324.0    0         324.0      13058.0  0         13058.0    4        0       
+system             28        3          25          2044.0   3199.0    -1155.0    14310.0  2399.0    11911.0    17       3       
+sh-cc-w            54        0          54          537.0    0         537.0      7244.0   0         7244.0     0        0       
+llmmsg-ca          64        0          64          290.0    0         290.0      4641.0   0         4641.0     0        0       
+route-test-sender  3         0          3           13.0     0         13.0       10.0     0         10.0       0        0       
+smoke-a            3         3          0           16.0     16.0      0.0        12.0     12.0      0.0        0        0       
 
 
-Audit snapshot saved (guide v2.5)
+Audit snapshot saved (guide v2.7)

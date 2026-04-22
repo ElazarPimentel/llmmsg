@@ -7,7 +7,8 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '4.3';
+const VERSION = '4.4';
+const LENGTH_NUDGE_THRESHOLD = 1500;
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
@@ -875,6 +876,31 @@ const server = http.createServer(async (req, res) => {
         } catch (e) {
           console.log(`[send] nudge failed for ${from}: ${e.message}`);
         }
+      }
+
+      // Per-send length nudge: ARO fan-out multiplies every byte by N recipients,
+      // so long sends are the dominant token cost. Warn (never reject) when body
+      // exceeds LENGTH_NUDGE_THRESHOLD. Same self-healing pattern as the wrapper
+      // nudge: fire-and-forget, failures never affect the primary send result.
+      try {
+        const previewBody = typeof message === 'string'
+          ? message
+          : (message && typeof message === 'object' ? JSON.stringify(message) : String(message ?? ''));
+        if (previewBody.length > LENGTH_NUDGE_THRESHOLD) {
+          const guideRow = stmtGetConfig.get('message_guide');
+          const v = guideRow ? guideRow.version : '?';
+          const target = to.startsWith('aro:')
+            ? `ARO ${to} (fan-out multiplies this by every member)`
+            : `'${to}'`;
+          const nudge =
+            `length reminder: your last send to ${target} was ${previewBody.length} chars ` +
+            `(threshold ${LENGTH_NUDGE_THRESHOLD}). See guide rules 11, 15, 17, 19 (v${v}) — ` +
+            `no dossier dumps on ARO; summarize in 1–2 lines, cite by tag or offer on request. ` +
+            `Exception: if the user/PM explicitly asked for the full artifact in this thread, ignore this nudge.`;
+          sendMessage('system', from, null, nudge);
+        }
+      } catch (e) {
+        console.log(`[send] length-nudge failed for ${from}: ${e.message}`);
       }
 
       // aro fan-out: to: "aro:mars" → send to each active member individually

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="2.3"
+VERSION="2.4"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -129,7 +129,8 @@ Rules
 16. Reference by location when useful, rather than pasting content.
 17. If 3 lines are enough, do not send 30.
 18. No sycophantic or zero-information messages. Do not send messages that only acknowledge, praise, or restate what the recipient already said. Every message must carry a new decision, action, or fact. Exception: short close-outs that change coordination state (approved, blocked, proceed, superseded, handed off).
-', '2.7');
+19. No dossier dumps on ARO. Plans, design docs, full diffs, and other large artifacts belong in files (commit/branch, repo path, or tag reference), not in a fan-out send. An ARO send carries the decision + a pointer (file path or tag) to the artifact. If a recipient needs the full artifact, they ask via DM and you reply via DM. Exception: the user or PM explicitly asked for the full artifact inline in this thread. Hub emits a length-nudge above 1500 chars.
+', '2.8');
 
 -- Overview
 CREATE VIEW v_overview AS
