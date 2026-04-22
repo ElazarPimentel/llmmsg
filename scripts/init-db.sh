@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="2.0"
+VERSION="2.1"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -249,11 +249,16 @@ GROUP BY sender
 ORDER BY total DESC;
 
 -- Operational views used by hub.mjs.
+-- Collapse ARO fan-out copies (one row per member, same sender/ts/body/origin_aro)
+-- into a single logical message. Non-fan-out rows (origin_aro IS NULL) are kept
+-- distinct by including id in the grouping expression, so legitimate identical
+-- direct messages sent in the same second are not collapsed.
 CREATE VIEW v_logical_messages AS
 SELECT MIN(id) AS id, sender, MIN(recipient) AS recipient, MIN(tag) AS tag,
        re, body, retracted_at, origin_aro, ts
 FROM messages
-GROUP BY sender, ts, body, origin_aro, re, retracted_at;
+GROUP BY sender, ts, body, COALESCE(re,''), COALESCE(retracted_at,0), origin_aro,
+         CASE WHEN origin_aro IS NULL THEN id ELSE 0 END;
 
 CREATE VIEW v_roster_online AS
 SELECT agent, cwd, last_seen_at

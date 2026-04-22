@@ -12,7 +12,7 @@ Usage:
   llmmsg-cli.py log [limit]
   llmmsg-cli.py agents
 """
-VERSION = "2.3"
+VERSION = "2.4"
 
 import sqlite3
 import sys
@@ -45,14 +45,24 @@ def row_to_msg(r, include_body=True):
         else:
             msg["preview"] = "<retracted>"
         return msg
+    # Schema v2: body is plain text. Older rows may still be JSON-wrapped —
+    # attempt a parse so legacy {"message": ...} previews still look right,
+    # but default to the raw string.
+    raw = r["body"]
+    body = raw
     try:
-        body = json.loads(r["body"])
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict):
+            body = parsed
     except Exception:
-        body = r["body"]
+        pass
     if include_body:
         msg["body"] = body
     else:
-        preview = (body.get("summary") or body.get("message") or json.dumps(body))[:120] if isinstance(body, dict) else str(body)[:120]
+        if isinstance(body, dict):
+            preview = (body.get("summary") or body.get("message") or json.dumps(body))[:120]
+        else:
+            preview = str(body)[:120]
         msg["preview"] = preview
     return msg
 
@@ -113,14 +123,18 @@ def cmd_roster():
 
 
 def cmd_send(sender, recipient, re_tag, body_raw):
+    # Schema v2: body is plain text, tag is GENERATED. Accept either a plain
+    # string or a JSON object with a `message` key (legacy shape) — the object
+    # form is unwrapped to the message string before insert.
+    body = body_raw
     try:
-        payload = json.loads(body_raw)
-    except Exception as e:
-        fail(f"body must be valid JSON: {e}")
-    if not isinstance(payload, dict):
-        fail("body must be a JSON object")
-
-    body = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+        parsed = json.loads(body_raw)
+        if isinstance(parsed, dict) and isinstance(parsed.get("message"), str):
+            body = parsed["message"]
+        elif isinstance(parsed, (dict, list)):
+            body = json.dumps(parsed, ensure_ascii=False, separators=(",", ":"))
+    except Exception:
+        pass
 
     con = get_db()
 
@@ -128,21 +142,18 @@ def cmd_send(sender, recipient, re_tag, body_raw):
     if roster:
         if sender not in roster:
             fail(f"sender '{sender}' not registered. Run: llmmsg-cli.py register {sender} /path/to/cwd")
-        if recipient != '*' and recipient not in roster:
+        if recipient != '*' and not recipient.startswith('aro:') and recipient not in roster:
             names = ", ".join(roster)
             fail(f"recipient '{recipient}' not in roster. Ask your user for the correct session name. Registered: {names}")
 
-    cur = con.cursor()
-    cur.execute("BEGIN")
-    cur.execute(
-        "INSERT INTO messages (sender, recipient, tag, re, body) "
-        "VALUES (?, ?, '_pending', ?, ?) RETURNING id",
+    cur = con.execute(
+        "INSERT INTO messages (sender, recipient, re, body) "
+        "VALUES (?, ?, ?, ?) RETURNING id, tag",
         (sender, recipient, re_tag, body)
     )
-    row_id = cur.fetchone()[0]
-    tag = f"{sender}-{row_id}"
-    cur.execute("UPDATE messages SET tag = ? WHERE id = ?", (tag, row_id))
-    cur.execute("COMMIT")
+    row = cur.fetchone()
+    row_id, tag = row[0], row[1]
+    con.commit()
     con.close()
     print(json.dumps({"ok": True, "id": row_id, "tag": tag}))
 

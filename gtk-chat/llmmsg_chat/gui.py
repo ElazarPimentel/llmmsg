@@ -10,9 +10,11 @@ Run:
     python3 -m llmmsg_chat.gui --agent elazar-whey-gui-w --cwd "$(pwd)"
 """
 
-VERSION = '0.2.0'
+VERSION = '0.4.0'
+APP_NAME = 'llmmsg-chat'
 
 import argparse
+import hashlib
 import os
 import signal
 import sys
@@ -22,7 +24,19 @@ from typing import Optional
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Adw', '1')
-from gi.repository import Adw, Gio, GLib, GObject, Gtk  # noqa: E402
+from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk  # noqa: E402
+
+
+# 12-color palette tuned for readable-on-both-light-and-dark backgrounds.
+_AGENT_PALETTE = [
+    '#1a73e8', '#d93025', '#188038', '#b06000', '#8430ce', '#009688',
+    '#c5221f', '#1e8e3e', '#f29900', '#ad1457', '#0097a7', '#6d4c41',
+]
+
+
+def color_for_agent(name: str) -> str:
+    h = hashlib.md5(name.encode('utf-8', errors='replace')).digest()
+    return _AGENT_PALETTE[h[0] % len(_AGENT_PALETTE)]
 
 from .hub_client import HubClient, HubError, SSEStream
 
@@ -70,7 +84,7 @@ class ChatWindow(Adw.ApplicationWindow):
     def __init__(self, app: 'ChatApp', client: HubClient, agent: str, cwd: str):
         super().__init__(application=app)
         self.set_default_size(960, 640)
-        self.set_title(f'llmmsg-chat · {agent}')
+        self.set_title(f'{APP_NAME} v{VERSION} · {agent}')
 
         self.client = client
         self.agent = agent
@@ -80,6 +94,10 @@ class ChatWindow(Adw.ApplicationWindow):
         self.row_by_bucket: dict[str, Gtk.ListBoxRow] = {}
         self.label_by_bucket: dict[str, Gtk.Label] = {}
         self.scroll_by_bucket: dict[str, Gtk.ScrolledWindow] = {}
+        # Sticky-at-bottom state per room: True while the user is pinned to
+        # the latest message; set to False when they scroll up manually, so
+        # incoming messages don't yank them away from what they're reading.
+        self.stick_bottom: dict[str, bool] = {}
         self.current_bucket: Optional[str] = None
 
         self._build_ui()
@@ -252,8 +270,13 @@ class ChatWindow(Adw.ApplicationWindow):
         toolbar = Adw.ToolbarView()
 
         self.content_header = Adw.HeaderBar()
-        self.room_title = Adw.WindowTitle.new('', '')
+        self.room_title = Adw.WindowTitle.new(APP_NAME, f'v{VERSION} · {self.agent}')
         self.content_header.set_title_widget(self.room_title)
+
+        help_btn = Gtk.Button(icon_name='help-about-symbolic',
+                              tooltip_text='Help / commands')
+        help_btn.connect('clicked', self._on_help_clicked)
+        self.content_header.pack_start(help_btn)
 
         leave_btn = Gtk.Button(icon_name='user-trash-symbolic',
                                tooltip_text='Leave current ARO')
@@ -276,17 +299,35 @@ class ChatWindow(Adw.ApplicationWindow):
         self.chat_stack.add_named(self._empty, '__empty__')
         self.chat_stack.set_visible_child_name('__empty__')
 
-        # Compose row (shared across rooms)
+        # Compose row — multi-line TextView so \n can be typed (Shift+Enter)
+        # and received messages with embedded newlines render naturally.
         compose = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,
                           margin_start=12, margin_end=12,
                           margin_top=6, margin_bottom=12)
-        self.compose_entry = Gtk.Entry(placeholder_text='Message (Enter to send)',
-                                       hexpand=True)
-        self.compose_entry.connect('activate', self._on_send)
-        send_btn = Gtk.Button(icon_name='document-send-symbolic', tooltip_text='Send')
+        self.compose_view = Gtk.TextView()
+        self.compose_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.compose_view.set_accepts_tab(False)
+        self.compose_view.set_top_margin(6)
+        self.compose_view.set_bottom_margin(6)
+        self.compose_view.set_left_margin(6)
+        self.compose_view.set_right_margin(6)
+        compose_scroll = Gtk.ScrolledWindow(hexpand=True)
+        compose_scroll.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        compose_scroll.set_min_content_height(72)   # ≈ 3 lines
+        compose_scroll.set_max_content_height(160)
+        compose_scroll.set_child(self.compose_view)
+        compose_scroll.add_css_class('card')
+
+        # Enter = send, Shift+Enter = newline
+        key_ctrl = Gtk.EventControllerKey()
+        key_ctrl.connect('key-pressed', self._on_compose_key)
+        self.compose_view.add_controller(key_ctrl)
+
+        send_btn = Gtk.Button(icon_name='document-send-symbolic', tooltip_text='Send (Enter)')
         send_btn.add_css_class('suggested-action')
+        send_btn.set_valign(Gtk.Align.END)
         send_btn.connect('clicked', self._on_send)
-        compose.append(self.compose_entry)
+        compose.append(compose_scroll)
         compose.append(send_btn)
 
         content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -351,9 +392,28 @@ class ChatWindow(Adw.ApplicationWindow):
         scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         self.chat_stack.add_named(scroll, bucket)
         self.scroll_by_bucket[bucket] = scroll
+        self.stick_bottom[bucket] = True
+
+        # Auto-scroll plumbing. 'changed' fires when the content size changes
+        # (new row appended, layout settled) — at that point adj.get_upper() is
+        # the new post-append value, so scrolling here is reliable.
+        # 'value-changed' fires when the scroll position changes (user drag /
+        # wheel / keyboard), so we can detect whether the user has pinned to
+        # the bottom or scrolled up to read older messages.
+        adj = scroll.get_vadjustment()
+        adj.connect('changed', self._on_vadj_changed, bucket)
+        adj.connect('value-changed', self._on_vadj_value_changed, bucket)
 
         # Preload history (async)
         self._load_history(bucket)
+
+    def _on_vadj_changed(self, adj, bucket: str):
+        if self.stick_bottom.get(bucket, True):
+            adj.set_value(max(0.0, adj.get_upper() - adj.get_page_size()))
+
+    def _on_vadj_value_changed(self, adj, bucket: str):
+        at_bottom = (adj.get_value() + adj.get_page_size()) >= (adj.get_upper() - 2.0)
+        self.stick_bottom[bucket] = at_bottom
 
     def _load_history(self, bucket: str):
         def work():
@@ -387,6 +447,8 @@ class ChatWindow(Adw.ApplicationWindow):
         row = self.row_by_bucket.get(bucket)
         if row is not None:
             self.rooms_list.select_row(row)
+        # Re-pin to bottom on room select (user expects newest visible).
+        self.stick_bottom[bucket] = True
         GLib.idle_add(self._scroll_to_bottom, bucket)
 
     def _scroll_to_bottom(self, bucket: str):
@@ -410,10 +472,10 @@ class ChatWindow(Adw.ApplicationWindow):
     def _message_setup(self, _factory, list_item):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2,
                       margin_start=12, margin_end=12, margin_top=4, margin_bottom=4)
-        sender_label = Gtk.Label(xalign=0)
+        sender_label = Gtk.Label(xalign=0, use_markup=True)
         sender_label.add_css_class('caption')
-        sender_label.add_css_class('dim-label')
         body_label = Gtk.Label(xalign=0, wrap=True, selectable=True, use_markup=False)
+        body_label.set_wrap_mode(2)  # PANGO_WRAP_WORD_CHAR
         body_label.set_halign(Gtk.Align.START)
         box.append(sender_label)
         box.append(body_label)
@@ -424,20 +486,70 @@ class ChatWindow(Adw.ApplicationWindow):
 
     def _message_bind(self, _factory, list_item):
         msg: Message = list_item.get_item()
-        list_item.sender_label.set_label(f'{msg.sender}')
-        list_item.body_label.set_label(msg.body)
+        color = color_for_agent(msg.sender or '?')
+        safe = GLib.markup_escape_text(msg.sender or '?')
+        list_item.sender_label.set_markup(
+            f'<span foreground="{color}" weight="bold">{safe}</span>'
+        )
+        list_item.body_label.set_label(msg.body or '')
 
     # ------------- Send -------------
+
+    def _on_compose_key(self, _ctrl, keyval, _keycode, state):
+        # Enter (no Shift) = send; Shift+Enter = newline (default handling).
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
+            if not (state & Gdk.ModifierType.SHIFT_MASK):
+                self._on_send(None)
+                return True
+        return False
+
+    def _on_help_clicked(self, _btn):
+        dlg = Adw.AboutWindow(
+            transient_for=self,
+            application_name=APP_NAME,
+            application_icon='mail-message-new-symbolic',
+            version=VERSION,
+            comments=(
+                'GTK client for llmmsg-channel.\n\n'
+                'Compose / keys:\n'
+                '  Enter — send message\n'
+                '  Shift+Enter — newline inside compose\n'
+                '  Click send icon — send (same as Enter)\n\n'
+                'Joining / leaving AROs:\n'
+                '  Sidebar + button — open the join popover\n'
+                '    · pick an existing ARO from the list (✓ = already joined)\n'
+                '    · or type a new name and press Enter / Join\n'
+                '  Header trash icon — leave the currently selected ARO\n'
+                '  Leaving an ARO removes the room from the sidebar but\n'
+                '    keeps its history in the DB.\n\n'
+                'Rooms / scrolling:\n'
+                '  Click a sidebar row — switch to that room, auto-scroll to\n'
+                '    the newest message\n'
+                '  New incoming messages — auto-scroll if you are already at\n'
+                '    the bottom; stay put if you scrolled up to read history\n'
+                '  Sidebar badge — unread count for rooms you are not viewing\n\n'
+                'Message routing:\n'
+                '  aro:<name> — group room (all ARO members receive)\n'
+                '  <agent>    — direct message from that agent\n\n'
+                'Exit:\n'
+                '  Window X — cleanly unregisters and closes\n'
+                '  Ctrl+C in the terminal — same clean shutdown\n'
+            ),
+            developer_name='llmmsg',
+            license_type=Gtk.License.MIT_X11,
+        )
+        dlg.present()
 
     def _on_send(self, _widget):
         bucket = self.current_bucket
         if not bucket:
             self._toast('select a room first')
             return
-        text = self.compose_entry.get_text().strip()
+        buf = self.compose_view.get_buffer()
+        text = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False).strip()
         if not text:
             return
-        self.compose_entry.set_text('')
+        buf.set_text('', 0)
         # bucket already has the correct prefix ('aro:X' or plain agent for DM)
         target = bucket
         def work():
@@ -513,8 +625,8 @@ class ChatWindow(Adw.ApplicationWindow):
         if self.current_bucket == bucket:
             self.current_bucket = None
             self.chat_stack.set_visible_child_name('__empty__')
-            self.room_title.set_title('')
-            self.room_title.set_subtitle('')
+            self.room_title.set_title(APP_NAME)
+            self.room_title.set_subtitle(f'v{VERSION} · {self.agent}')
         return False
 
     # ------------- SSE event dispatch -------------
@@ -620,8 +732,20 @@ class ChatApp(Adw.Application):
         self.win.present()
 
     def _on_close(self, win: ChatWindow):
-        win.cleanup()
-        self.quit()
+        # Cleanup calls SSEStream.stop() (join up to 2s) and an HTTP /unregister.
+        # Doing that synchronously on the GTK main thread froze the window for
+        # seconds and sometimes hung entirely when the SSE worker was stuck in
+        # readline. Hide the window immediately, push blocking shutdown to a
+        # daemon thread, then quit from the main loop once it returns.
+        win.set_visible(False)
+
+        def shutdown():
+            try:
+                win.cleanup()
+            finally:
+                GLib.idle_add(self.quit)
+
+        threading.Thread(target=shutdown, daemon=True, name='shutdown').start()
         return False
 
 

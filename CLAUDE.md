@@ -131,6 +131,16 @@ Reply routing: if the incoming channel metadata has `origin_aro`, reply to that 
 - **Minimal viable fix.** When a bug is reported, diagnose the root cause, apply the smallest change that fixes it, and stop. Do not bundle refactors, add features, or expand scope. If a refactor is needed, it's a separate commit with explicit approval.
 - **Coordinate before editing shared files.** Multi-agent work (ca / cc / sh-cc-w) must assign file ownership before anyone edits. One agent edits, another reviews. Never parallel-edit the same file.
 
+  Required workflow in a multi-agent ARO:
+  1. **Volunteer.** One agent announces in the ARO which file(s) it proposes to edit and the scope of the change. Do not start editing yet.
+  2. **Await response.** Wait for agreement or disagreement from the other agent(s). If another agent is already editing or objects, negotiate — do not proceed in parallel.
+  3. **Agreement.** Only after explicit ack does the volunteering agent begin editing. Exactly one agent holds the edit lock per file.
+  4. **Request audit.** When the edits are done, the editor pings the ARO and asks another agent to audit.
+  5. **Iterate.** Apply audit feedback. Re-request audit if the changes are material.
+  6. **Commit.** Once the auditor signals the code is good, the main session (Elazar's direct terminal) runs `gitpush.sh`. Agents never push.
+
+  If you discover an in-flight edit from another agent on a file you were about to touch, stop immediately, announce the conflict in the ARO, and hand the lock back.
+
 ## Script Versioning
 
 Every `.sh` and `.py` file must have a `VERSION` variable and print name + version on run. Bump on every change.

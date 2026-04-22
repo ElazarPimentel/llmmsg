@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
 
-const VERSION = '2.3';
+const VERSION = '2.5';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_HOST = process.env.LLMMSG_HUB_HOST || '127.0.0.1';
 const HUB_URL = `http://${HUB_HOST}:${HUB_PORT}`;
@@ -107,7 +107,7 @@ const mcp = new Server(
     },
     instructions: [
       'Messages from other agents arrive through llmmsg-channel push notifications with from, tag, optional re, and optional origin_aro metadata.',
-      'If origin_aro is present, reply to that exact ARO using send(to=origin_aro, re=tag). If origin_aro is absent, reply directly to from using send(to=from, re=tag).',
+      'If origin_aro is present, reply to that exact ARO using send(to=origin_aro, re=tag). If origin_aro is absent, reply directly to from using send(to=from, re=tag). Replies to an ARO-origin tag sent to a DM are a routing bug and the hub rejects them.',
       'Never answer a llmmsg-channel message in normal terminal/CLI prose. Use the send tool for the reply, then continue work.',
       'You must be registered before sending. If send returns not_registered, ask the user: "What is my agent name for this session?" then call register.',
       'Use the send tool to message other agents. Default to aro:{group}. Use "*" only with Elazar\'s explicit approval. Never broadcast what can be group-addressed.',
@@ -120,7 +120,7 @@ const mcp = new Server(
       'Call read_unread once only if the user asked, or if there is clear evidence a reply is missing. Inform your project\'s PM agent of missing replies. If that does not resolve it, tell the user in the terminal.',
       'Do not re-register defensively before sends. Register at session start, after a name change, or only after an actual not_registered error.',
       'Tags are auto-generated as sender-id. Use re parameter to reply to a tag.',
-      'Message body should be a JSON object with at least a message key, e.g. {"message": "your text"}. Do not resend shared context. Lead with the payload: decision, blocker, verdict, proposed fix, or next action.',
+      'Message body is plain text: pass `message` as a string. Lead with the payload (decision, blocker, verdict, proposed fix, or next action). Pass a JSON object only when machine-readable data is genuinely needed — it will be serialized and receivers will see a string.',
       'Plain prose by default. Structured fields only when machine-readable data is genuinely needed. No duplicate fields, no type unless a tool requires it.',
       'Keep only decision-relevant content. For reviews and audits: verdict + minimal facts, count + one critical example, proposed fix + risk. Reference by location when useful, rather than pasting content.',
       'If 3 lines are enough, do not send 30.',
@@ -144,12 +144,12 @@ const TOOLS = [
   },
   {
     name: 'send',
-    description: 'Send a llmmsg-channel message. For replies, use to=origin_aro when the incoming message has origin_aro; otherwise use to=from. Always pass re=tag when replying. Never reply to channel messages in terminal prose.',
+    description: 'Send a llmmsg-channel message. For replies, if the incoming message has origin_aro, to MUST equal origin_aro; otherwise use to=from. Always pass re=tag when replying. The hub rejects DM replies to ARO-origin tags. Never reply to channel messages in terminal prose.',
     inputSchema: {
       type: 'object',
       properties: {
         to: { type: 'string', description: 'Recipient agent name, aro:{group}, or "*" for broadcast. Prefer aro:{group}; use "*" only with Elazar approval.' },
-        message: { type: 'object', description: 'JSON message body. Minimum: {"message": "your text"}. Avoid type unless explicitly required. Add structured keys only when machine-readable data is truly needed.' },
+        message: { type: 'string', description: 'Message body as plain text. Lead with the payload. Pass a JSON object only when machine-readable data is genuinely needed (it will be serialized to a string).' },
         re: { type: 'string', description: 'Tag of message being replied to. Use this for all replies.' },
       },
       required: ['to', 'message'],

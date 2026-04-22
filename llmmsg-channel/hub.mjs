@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '4.0';
+const VERSION = '4.1';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
@@ -280,7 +280,7 @@ const stmtHistoryDm = db.prepare(
 );
 const stmtCheckRoster = db.prepare(`SELECT 1 FROM roster WHERE agent = ?`);
 const stmtCheckOnline = db.prepare(`SELECT 1 FROM v_roster_online WHERE agent = ?`);
-const stmtCheckTag = db.prepare(`SELECT 1 FROM messages WHERE tag = ?`);
+const stmtReplyRoute = db.prepare(`SELECT origin_aro FROM messages WHERE tag = ?`);
 // ARO fanout only targets agents seen in the last 30s (bridge heartbeats every 2s) or with an active SSE connection.
 // Agents that went offline without unregistering are excluded after 30s of inactivity.
 const stmtAroMembersAll = db.prepare(`SELECT agent FROM aros WHERE aro = ? ORDER BY agent`);
@@ -800,9 +800,24 @@ const server = http.createServer(async (req, res) => {
         }));
         return;
       }
-      // Validate re tag if provided (warn only — cross-site tags won't exist locally)
-      if (re && !stmtCheckTag.get(re)) {
-        console.log(`[send] re tag '${re}' not found locally (may be cross-site)`);
+      // Validate reply route. If the referenced message originated in an
+      // ARO, replies must stay in that ARO; otherwise agents keep dragging
+      // room conversations into DMs. Cross-site tags may not exist locally,
+      // so unknown tags remain warn-only.
+      if (re) {
+        const route = stmtReplyRoute.get(re);
+        if (!route) {
+          console.log(`[send] re tag '${re}' not found locally (may be cross-site)`);
+        } else if (route.origin_aro && to !== route.origin_aro && to !== '*') {
+          res.writeHead(400);
+          res.end(JSON.stringify({
+            error: 'wrong_route',
+            expected_to: route.origin_aro,
+            re,
+            hint: `Reply to the originating ARO, not the sender. Retry with to=${route.origin_aro}.`,
+          }));
+          return;
+        }
       }
       // aro fan-out: to: "aro:mars" → send to each active member individually
       // "active" = has a live SSE connection OR was seen (heartbeat/register) in the last 30s
