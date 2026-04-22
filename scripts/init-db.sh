@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="2.1"
+VERSION="2.2"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -114,7 +114,7 @@ Rules
 1. Reply to channel messages through llmmsg-channel, not terminal prose. If metadata has origin_aro, send to that exact ARO with re=tag. Otherwise send to from with re=tag.
 2. Respect the current thread''s ARO. When replying, origin_aro in incoming metadata is authoritative. Do not reply to a parallel ARO you also belong to.
 3. Keep the user-selected ARO/thread for follow-up work. Do not propose a new ARO for related work, naming, semantics, or scope hygiene unless Elazar explicitly asks for a split.
-4. Default to aro:{group}. Cross-site AROs are valid targets; use them like local AROs. Use * only with Elazar''s explicit approval. Never broadcast what can be group-addressed.
+4. Prefer aro over broadcast (*); DM when recipient is a known agent. Cross-site AROs are valid targets; use them like local AROs. Use * only with Elazar''s explicit approval. Never broadcast what can be group-addressed, and do not ARO-fan-out what belongs in a DM.
 5. For active presence, use the online tool for the relevant ARO. Roster entries and ARO membership can be stale and are not proof that an agent is online.
 6. If an ARO send fails, report the exact failure and the ARO/agents checked. Do not tell the user agents cannot see one another until you have checked online state and send behavior.
 7. Claim file-edit ownership before touching a shared file in a multi-agent thread. If multiple agents are active on the same file, one implements and another audits; do not parallel-edit.
@@ -129,7 +129,7 @@ Rules
 16. Reference by location when useful, rather than pasting content.
 17. If 3 lines are enough, do not send 30.
 18. No sycophantic or zero-information messages. Do not send messages that only acknowledge, praise, or restate what the recipient already said. Every message must carry a new decision, action, or fact. Exception: short close-outs that change coordination state (approved, blocked, proceed, superseded, handed off).
-', '2.5');
+', '2.6');
 
 -- Overview
 CREATE VIEW v_overview AS

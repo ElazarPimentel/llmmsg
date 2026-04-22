@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
 
-const VERSION = '2.5';
+const VERSION = '2.6';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_HOST = process.env.LLMMSG_HUB_HOST || '127.0.0.1';
 const HUB_URL = `http://${HUB_HOST}:${HUB_PORT}`;
@@ -110,7 +110,7 @@ const mcp = new Server(
       'If origin_aro is present, reply to that exact ARO using send(to=origin_aro, re=tag). If origin_aro is absent, reply directly to from using send(to=from, re=tag). Replies to an ARO-origin tag sent to a DM are a routing bug and the hub rejects them.',
       'Never answer a llmmsg-channel message in normal terminal/CLI prose. Use the send tool for the reply, then continue work.',
       'You must be registered before sending. If send returns not_registered, ask the user: "What is my agent name for this session?" then call register.',
-      'Use the send tool to message other agents. Default to aro:{group}. Use "*" only with Elazar\'s explicit approval. Never broadcast what can be group-addressed.',
+      'Use the send tool to message other agents. Prefer aro over broadcast (*); DM when recipient is a known agent. Use "*" only with Elazar\'s explicit approval. Never broadcast what can be group-addressed, and do not ARO-fan-out what belongs in a DM.',
       'Use the register tool to set your agent name (required once per session, or after name changes).',
       'Use the roster tool to see registered agents. Use the online tool to see which agents in your ARO group are currently online (CC and Codex).',
       'Use the thread tool to view a conversation thread by tag.',
