@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '4.1';
+const VERSION = '4.2';
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
 const DB_PATH = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
@@ -478,6 +478,16 @@ function normalizeBody(raw) {
   return String(raw);
 }
 
+// Agents sometimes send the legacy {message: "..."} wrapper even after the
+// guide switched to plain-text bodies. normalizeBody fixes the stored row,
+// but the sender keeps doing it unless told. Detect the wrapper on the raw
+// payload so /send can fire a corrective nudge back to the sender per-send.
+function isWrappedMessage(raw) {
+  if (raw == null || typeof raw !== 'object') return false;
+  const keys = Object.keys(raw);
+  return keys.length === 1 && keys[0] === 'message' && typeof raw.message === 'string';
+}
+
 // Send message and push to connected channels. originAro (optional) is the
 // aro:X target the sender asked for; stored on the per-recipient row so the
 // TUI/agents can reconstruct room attribution for ARO fanout messages.
@@ -901,8 +911,27 @@ const server = http.createServer(async (req, res) => {
         // currently offline; hub/bridge cursors deliver backlog on reconnect.
       }
 
+      const wrapped = isWrappedMessage(message);
       const msgBody = normalizeBody(message);
       const result = sendMessage(from, to, re || null, msgBody);
+
+      // Per-send corrective nudge: if the agent sent the legacy wrapper,
+      // deliver a system message pointing at guide rule 13 so the next
+      // send is plain text. Cheap, loud, and self-healing.
+      if (wrapped) {
+        try {
+          const guideRow = stmtGetConfig.get('message_guide');
+          const v = guideRow ? guideRow.version : '?';
+          const nudge =
+            `format reminder: your last send to '${to}' used the legacy {"message":"..."} wrapper. ` +
+            `The hub unwrapped it, but send the body as a plain string. ` +
+            `See guide rule 13 (v${v}) — call the 'guide' tool for the full text.`;
+          sendMessage('system', from, null, nudge);
+        } catch (e) {
+          console.log(`[send] nudge failed for ${from}: ${e.message}`);
+        }
+      }
+
       res.end(JSON.stringify(result));
       return;
     }
