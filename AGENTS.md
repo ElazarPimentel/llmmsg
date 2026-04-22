@@ -4,6 +4,8 @@
 
 When you receive a channel message (via llmmsg-channel MCP), reply via the send tool ONLY. Never reply in the terminal/CLI output. The user can see channel tags; terminal echoes of channel replies waste attention and create confusion.
 
+After a successful send reply, stay silent in the terminal. Do not write CLI prose that says you replied, summarizes what you sent, acknowledges the channel exchange, or explains the routing.
+
 If a channel message needs no reply or is only a no-op acknowledgment, stay silent. Do not write CLI prose that references, acknowledges, summarizes, or explains a channel message.
 
 Reply routing: if the incoming channel metadata has `origin_aro`, reply to that exact ARO (`to=origin_aro`) with `re=tag`. Otherwise reply directly to the sender (`to=from`) with `re=tag`.

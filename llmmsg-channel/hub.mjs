@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '4.4';
+const VERSION = '4.5';
 const LENGTH_NUDGE_THRESHOLD = 1500;
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
@@ -725,8 +725,6 @@ const server = http.createServer(async (req, res) => {
       // First-time registration: initialize cursor at MAX(id) so the agent
       // starts "caught up" without receiving the full broadcast backlog.
       // Existing agents keep their cursor (upsert only inserts if missing).
-      // Also send the messaging guide as a regular inbound message so it
-      // lands in the agent's inbox via the normal SSE/bridge delivery path.
       const isFirstTimeRegister = !stmtGetCursor.get(agent);
       if (isFirstTimeRegister) {
         const maxRow = db.prepare(`SELECT COALESCE(MAX(id), 0) AS max_id FROM messages`).get();
@@ -734,15 +732,18 @@ const server = http.createServer(async (req, res) => {
 
         // Seed the system agent in the roster so it can send messages.
         stmtRegister.run('system', '/opt/llmmsg');
+      }
 
-        // Insert the guide as a direct system message. Stored with id >
-        // cursor, so the existing getUnreadMessages catch-up path (either
-        // /register below or /connect below) delivers it when SSE attaches.
-        const guideRow = stmtGetConfig.get('message_guide');
-        if (guideRow && guideRow.value) {
-          const guideText = `Messaging guide v${guideRow.version}:\n${guideRow.value}`;
-          try { sendMessage('system', agent, null, guideText); } catch {}
-        }
+      // Push the current messaging guide on EVERY /register, not just the
+      // first one. Guide text changes over time (rule additions, wording
+      // tightening) and long-running agents re-register rarely; gating this
+      // on isFirstTimeRegister meant post-v2.5 updates never reached any
+      // agent that had ever registered before. System DM is cheap, and
+      // agents who already have the latest text will just see a fresh copy.
+      const guideRow = stmtGetConfig.get('message_guide');
+      if (guideRow && guideRow.value) {
+        const guideText = `Messaging guide v${guideRow.version}:\n${guideRow.value}`;
+        try { sendMessage('system', agent, null, guideText); } catch {}
       }
 
       // Migrate SSE connection from old_agent (may be an unregistered-* alias) to new agent name

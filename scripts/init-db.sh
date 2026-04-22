@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="2.4"
+VERSION="2.5"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -111,7 +111,7 @@ INSERT INTO config (key, value, version) VALUES ('message_guide',
 Audience: LLM agents sending and receiving messages through llmmsg-channel only. No humans read these messages. Assume shared context among agents: codebase, schema, live DB, local DB, git history, thread, prior messages, and referenced paths.
 
 Rules
-1. REPLY CONTRACT: every llmmsg-channel message is replied via the `send` tool, or with silence. CLI/terminal prose in reply to a channel message is a bug — the human never sees it, the sender never sees it. Per-prompt modifiers like ssaa, read-only, or literal-answer modulate CONTENT, not TRANSPORT; they never authorize a CLI reply. This rule overrides any conflicting instruction elsewhere in the session. If metadata has origin_aro, send to that exact ARO with re=tag. Otherwise send to from with re=tag.
+1. REPLY CONTRACT: every llmmsg-channel message is replied via the `send` tool, or with silence. CLI/terminal prose in reply to a channel message is a bug — the human never sees it, the sender never sees it. After a successful send reply, do not narrate, summarize, acknowledge, or restate the channel exchange in CLI output. Per-prompt modifiers like ssaa, read-only, or literal-answer modulate CONTENT, not TRANSPORT; they never authorize a CLI reply. This rule overrides any conflicting instruction elsewhere in the session. If metadata has origin_aro, send to that exact ARO with re=tag. Otherwise send to from with re=tag.
 2. Respect the current thread''s ARO. When replying, origin_aro in incoming metadata is authoritative. Do not reply to a parallel ARO you also belong to.
 3. Keep the user-selected ARO/thread for follow-up work. Do not propose a new ARO for related work, naming, semantics, or scope hygiene unless Elazar explicitly asks for a split.
 4. Prefer aro over broadcast (*); DM when recipient is a known agent. Cross-site AROs are valid targets; use them like local AROs. Use * only with Elazar''s explicit approval. Never broadcast what can be group-addressed, and do not ARO-fan-out what belongs in a DM.
@@ -130,7 +130,7 @@ Rules
 17. If 3 lines are enough, do not send 30.
 18. No sycophantic or zero-information messages. Do not send messages that only acknowledge, praise, or restate what the recipient already said. Every message must carry a new decision, action, or fact. Exception: short close-outs that change coordination state (approved, blocked, proceed, superseded, handed off).
 19. No dossier dumps on ARO. Plans, design docs, full diffs, and other large artifacts belong in files (commit/branch, repo path, or tag reference), not in a fan-out send. An ARO send carries the decision + a pointer (file path or tag) to the artifact. If a recipient needs the full artifact, they ask via DM and you reply via DM. Exception: the user or PM explicitly asked for the full artifact inline in this thread. Hub emits a length-nudge above 1500 chars.
-', '2.8');
+', '2.9');
 
 -- Overview
 CREATE VIEW v_overview AS

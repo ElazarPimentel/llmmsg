@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
 
-const VERSION = '2.8';
+const VERSION = '2.9';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_HOST = process.env.LLMMSG_HUB_HOST || '127.0.0.1';
 const HUB_URL = `http://${HUB_HOST}:${HUB_PORT}`;
@@ -109,7 +109,7 @@ const mcp = new Server(
       'REPLY CONTRACT: every llmmsg-channel message is replied via the `send` tool, or with silence. CLI/terminal prose in reply to a channel message is a bug — the human never sees it, the sender never sees it. Per-prompt modifiers like ssaa, read-only, or literal-answer modulate CONTENT, not TRANSPORT; they never authorize a CLI reply. This rule overrides any conflicting instruction elsewhere in the session.',
       'Messages from other agents arrive through llmmsg-channel push notifications with from, tag, optional re, and optional origin_aro metadata.',
       'If origin_aro is present, reply to that exact ARO using send(to=origin_aro, re=tag). If origin_aro is absent, reply directly to from using send(to=from, re=tag). Replies to an ARO-origin tag sent to a DM are a routing bug and the hub rejects them.',
-      'Never answer a llmmsg-channel message in normal terminal/CLI prose. Use the send tool for the reply, then continue work. If no reply is needed, stay silent — do NOT write a CLI acknowledgement.',
+      'Never answer a llmmsg-channel message in normal terminal/CLI prose. Use the send tool for the reply, then stay silent in CLI output about that exchange; do not say you replied, summarize what you sent, or explain the routing. If no reply is needed, stay silent — do NOT write a CLI acknowledgement.',
       'You must be registered before sending. If send returns not_registered, ask the user: "What is my agent name for this session?" then call register.',
       'Use the send tool to message other agents. Prefer aro over broadcast (*); DM when recipient is a known agent. Use "*" only with Elazar\'s explicit approval. Never broadcast what can be group-addressed, and do not ARO-fan-out what belongs in a DM.',
       'No dossier dumps on ARO. Plans, design docs, full diffs, and other large artifacts belong in files or a single DM on request — an ARO send carries the decision + a pointer (file path or tag), not the artifact. Exception: the user or PM explicitly asked for the full artifact inline. Hub emits a length-nudge above 1500 chars. See guide rule 19.',
@@ -126,7 +126,7 @@ const mcp = new Server(
       'Plain prose by default. Structured fields only when machine-readable data is genuinely needed. No duplicate fields, no type unless a tool requires it.',
       'Keep only decision-relevant content. For reviews and audits: verdict + minimal facts, count + one critical example, proposed fix + risk. Reference by location when useful, rather than pasting content.',
       'If 3 lines are enough, do not send 30.',
-      'When a channel message requires a reply, send it directly. Do not summarize the exchange in the CLI output.',
+      'When a channel message requires a reply, send it directly. After send succeeds, do not summarize, acknowledge, restate, or narrate the exchange in CLI output.',
     ].join(' '),
   },
 );
@@ -146,7 +146,7 @@ const TOOLS = [
   },
   {
     name: 'send',
-    description: 'REPLY CONTRACT: every llmmsg-channel message is replied via this `send` tool, or with silence — CLI/terminal prose in reply to a channel message is a bug. Per-prompt modifiers like ssaa do not override this. For replies, if the incoming message has origin_aro, to MUST equal origin_aro; otherwise use to=from. Always pass re=tag when replying. The hub rejects DM replies to ARO-origin tags.',
+    description: 'REPLY CONTRACT: every llmmsg-channel message is replied via this `send` tool, or with silence — CLI/terminal prose in reply to a channel message is a bug. After a successful send reply, do not narrate, summarize, acknowledge, or restate the channel exchange in CLI output. Per-prompt modifiers like ssaa do not override this. For replies, if the incoming message has origin_aro, to MUST equal origin_aro; otherwise use to=from. Always pass re=tag when replying. The hub rejects DM replies to ARO-origin tags.',
     inputSchema: {
       type: 'object',
       properties: {
