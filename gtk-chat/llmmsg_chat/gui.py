@@ -10,7 +10,7 @@ Run:
     python3 -m llmmsg_chat.gui --agent elazar-whey-gui-w --cwd "$(pwd)"
 """
 
-VERSION = '0.1.0'
+VERSION = '0.2.0'
 
 import argparse
 import os
@@ -131,20 +131,122 @@ class ChatWindow(Adw.ApplicationWindow):
 
     def _build_join_popover(self) -> Gtk.Popover:
         pop = Gtk.Popover()
+        pop.set_size_request(320, -1)
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8,
                       margin_start=12, margin_end=12, margin_top=12, margin_bottom=12)
         box.append(Gtk.Label(label='Join ARO', xalign=0))
-        entry = Gtk.Entry(placeholder_text='aro name (e.g. mba-l)')
+
+        entry = Gtk.Entry(placeholder_text='type a name or pick below')
         entry.connect('activate', lambda e: self._do_join(e.get_text(), pop))
         box.append(entry)
-        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6, halign=Gtk.Align.END)
+        self._join_entry = entry
+
+        btn_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6,
+                          halign=Gtk.Align.END)
         join_btn = Gtk.Button(label='Join')
         join_btn.add_css_class('suggested-action')
         join_btn.connect('clicked', lambda _b: self._do_join(entry.get_text(), pop))
         btn_row.append(join_btn)
         box.append(btn_row)
+
+        # Divider + existing-ARO picker. Populated async when the popover opens.
+        box.append(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+        header_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        header_row.append(Gtk.Label(label='Existing AROs', xalign=0, hexpand=True))
+        self._aro_status = Gtk.Label(xalign=1)
+        self._aro_status.add_css_class('caption')
+        self._aro_status.add_css_class('dim-label')
+        header_row.append(self._aro_status)
+        box.append(header_row)
+
+        self._aro_listbox = Gtk.ListBox()
+        self._aro_listbox.add_css_class('boxed-list')
+        self._aro_listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self._aro_listbox.connect('row-activated', self._on_aro_pick, pop)
+
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_propagate_natural_height(True)
+        scroll.set_max_content_height(260)
+        scroll.set_min_content_height(120)
+        scroll.set_child(self._aro_listbox)
+        box.append(scroll)
+
         pop.set_child(box)
+        # Refresh the list each time the popover opens (cheap call, ~few ms).
+        pop.connect('show', self._refresh_aro_list)
         return pop
+
+    def _refresh_aro_list(self, _popover):
+        if self._aro_status:
+            self._aro_status.set_label('loading…')
+
+        def work():
+            try:
+                data = self.client.aro_list()
+                GLib.idle_add(self._populate_aro_list, data)
+            except Exception as exc:
+                GLib.idle_add(self._aro_list_failed, str(exc))
+
+        threading.Thread(target=work, daemon=True, name='aro-list').start()
+
+    def _populate_aro_list(self, data: dict):
+        # Strip existing rows
+        child = self._aro_listbox.get_first_child()
+        while child is not None:
+            nxt = child.get_next_sibling()
+            self._aro_listbox.remove(child)
+            child = nxt
+
+        names = sorted(data.keys(), key=str.lower)
+        self._aro_status.set_label(f'{len(names)} total')
+        for name in names:
+            members = data.get(name) or []
+            bucket = f'aro:{name}'
+            joined = bucket in self.rooms
+
+            row = Gtk.ListBoxRow()
+            row_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
+                              margin_start=12, margin_end=12,
+                              margin_top=6, margin_bottom=6)
+            name_lbl = Gtk.Label(label=name, xalign=0, hexpand=True)
+            row_box.append(name_lbl)
+
+            members_lbl = Gtk.Label(label=f'{len(members)} member{"s" if len(members) != 1 else ""}',
+                                     xalign=1)
+            members_lbl.add_css_class('caption')
+            members_lbl.add_css_class('dim-label')
+            row_box.append(members_lbl)
+
+            if joined:
+                tick = Gtk.Image.new_from_icon_name('emblem-ok-symbolic')
+                tick.set_tooltip_text('already joined')
+                row_box.append(tick)
+            row.set_child(row_box)
+            row.aro_name = name  # type: ignore[attr-defined]
+            self._aro_listbox.append(row)
+
+        if not names:
+            placeholder = Gtk.Label(label='(no AROs exist yet)', margin_top=12, margin_bottom=12)
+            placeholder.add_css_class('dim-label')
+            self._aro_listbox.set_placeholder(placeholder)
+        return False
+
+    def _aro_list_failed(self, err: str):
+        self._aro_status.set_label('load failed')
+        self._toast(f'aro list: {err}')
+        return False
+
+    def _on_aro_pick(self, _listbox, row: Gtk.ListBoxRow, popover: Gtk.Popover):
+        name = getattr(row, 'aro_name', None)
+        if not name:
+            return
+        bucket = f'aro:{name}'
+        if bucket in self.rooms:
+            # Already joined — just focus it and close the popover.
+            popover.popdown()
+            self._select_room(bucket)
+            return
+        self._do_join(name, popover)
 
     def _build_content(self) -> Gtk.Widget:
         toolbar = Adw.ToolbarView()
@@ -496,8 +598,11 @@ class ChatWindow(Adw.ApplicationWindow):
 
 class ChatApp(Adw.Application):
     def __init__(self, ns: argparse.Namespace):
+        # NON_UNIQUE lets multiple instances coexist (one per --agent), and
+        # avoids stale-dbus single-instance behavior where a silent second
+        # launch would hand control to a first process and immediately exit.
         super().__init__(application_id='io.llmmsg.Chat',
-                         flags=Gio.ApplicationFlags.DEFAULT_FLAGS)
+                         flags=Gio.ApplicationFlags.NON_UNIQUE)
         self.ns = ns
         self.win: Optional[ChatWindow] = None
 

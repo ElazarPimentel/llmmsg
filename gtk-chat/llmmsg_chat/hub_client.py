@@ -12,7 +12,7 @@ thread boundary: when SSEStream fires on_event from the worker, the UI side is
 responsible for dispatching back to its main thread.
 """
 
-VERSION = '0.0.2'
+VERSION = '0.0.3'
 
 import http.client
 import json
@@ -100,6 +100,11 @@ class HubClient:
 
     def aro_leave(self, agent: str, aro: str) -> dict:
         return self._request('POST', '/aro/leave', {'agent': agent, 'aro': aro}) or {}
+
+    def aro_list(self) -> dict:
+        """All known ARO groups. Returns {aro_name: [member_agents, ...]}."""
+        result = self._request('GET', '/aro')
+        return result if isinstance(result, dict) else {}
 
 
 class SSEStream:
