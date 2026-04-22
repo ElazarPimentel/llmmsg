@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
 
-const VERSION = '2.2';
+const VERSION = '2.3';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_HOST = process.env.LLMMSG_HUB_HOST || '127.0.0.1';
 const HUB_URL = `http://${HUB_HOST}:${HUB_PORT}`;
@@ -20,6 +20,49 @@ const AGENT_CWD = process.env.LLMMSG_CWD || process.cwd();
 let currentAgent = (process.env.LLMMSG_AGENT || '').toLowerCase();
 // The alias used for the current SSE connection (may be unregistered-xxxx)
 let sseAlias = '';
+
+// Claude Code's `notifications/claude/channel` router is not yet wired at MCP
+// `initialize` time, so any SSE frame that lands before the first model-driven
+// tool call is dropped by CC — that includes the guide pushed on auto-register.
+// Buffer those frames; drain them into the first tool call's response content,
+// which CC always injects into the model's context. After the first drain,
+// routing is live and the notification path works normally. Next register
+// tool call resets the cycle in case CC keeps the same channel.mjs across
+// agent-name changes.
+const pendingForModel = [];
+let drainedOnce = false;
+
+function formatBufferedEvent(event) {
+  const body = event.body == null
+    ? ''
+    : (typeof event.body === 'string' ? event.body : JSON.stringify(event.body));
+  const attrs = [
+    `from="${event.from ?? ''}"`,
+    `to="${event.to ?? ''}"`,
+    `tag="${event.tag ?? ''}"`,
+    event.re ? `re="${event.re}"` : '',
+    event.origin_aro ? `origin_aro="${event.origin_aro}"` : '',
+  ].filter(Boolean).join(' ');
+  return `<channel ${attrs}>${body}</channel>`;
+}
+
+// Prepend any pending (pre-first-tool-call) events to the tool response so
+// the model receives them. One-shot per session; afterwards the notification
+// path carries new messages reliably.
+function withDrain(response) {
+  if (drainedOnce || pendingForModel.length === 0) return response;
+  drainedOnce = true;
+  const drained = pendingForModel.splice(0, pendingForModel.length);
+  const preamble =
+    `--- llmmsg-channel inbox (${drained.length} message${drained.length === 1 ? '' : 's'} ` +
+    `delivered during session startup) ---\n` +
+    drained.map(formatBufferedEvent).join('\n\n') +
+    `\n--- end inbox ---`;
+  return {
+    ...response,
+    content: [{ type: 'text', text: preamble }, ...(response.content || [])],
+  };
+}
 
 // HTTP helpers
 function httpPost(path, body) {
@@ -212,6 +255,11 @@ mcp.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   const { name, arguments: args } = req.params;
 
+  const result = await handleCall(name, args);
+  return withDrain(result);
+});
+
+async function handleCall(name, args) {
   try {
     switch (name) {
       case 'register': {
@@ -225,6 +273,9 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (result.ok) {
           currentAgent = newAgent;
           sseAlias = newAgent; // hub renamed the SSE entry, keep alias in sync
+          // Reset drain cycle so the new-session guide (pushed by the hub on
+          // every register) gets surfaced on the next tool call.
+          drainedOnce = false;
         }
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
@@ -315,7 +366,7 @@ mcp.setRequestHandler(CallToolRequestSchema, async (req) => {
   } catch (err) {
     return { content: [{ type: 'text', text: JSON.stringify({ error: err.message }) }] };
   }
-});
+}
 
 // Connect MCP to Claude Code via stdio
 await mcp.connect(new StdioServerTransport());
@@ -390,6 +441,11 @@ function connectToHub() {
           try {
             const event = JSON.parse(line.slice(6));
             console.error(`[llmmsg-channel] PUSH from=${event.from} tag=${event.tag} to=${event.to}`);
+            // Buffer for the first-tool-call drain (covers the MCP-init race
+            // where CC's notification router isn't attached yet). Once
+            // drainedOnce flips, we stop buffering — the notification path
+            // below is reliable mid-session.
+            if (!drainedOnce) pendingForModel.push(event);
             const replyTarget = event.origin_aro || event.from;
             mcp.notification({
               method: 'notifications/claude/channel',
