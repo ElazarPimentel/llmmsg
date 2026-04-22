@@ -6,36 +6,57 @@ renders what the hub sends.
 
 ## Status
 
-- **v0.0.1 — PoC headless only.** CLI REPL that exercises the full protocol
-  (register, SSE push, /history, /online, /send, /aro join/leave, clean
-  unregister on exit). No GTK yet. Purpose: prove the hub client + SSE
-  threading model before we wire up Adw.Application.
+- **v0.1.0 — first GTK window.** `AdwNavigationSplitView` with a rooms sidebar
+  (joined AROs + active DM senders), a chat pane with message listview + compose
+  entry, `+` popover to join an ARO, leave button per-room, live SSE updates,
+  unread badges. Clean agent unregister on SIGINT/SIGTERM/window-close.
+- v0.0.2 — hardened PoC CLI: `-c/--command/--listen` for non-interactive iteration;
+  SSE uses line-buffered `readline` (fixed 60s idle ghost), per-connection
+  watchdog, clean shutdown path.
+- v0.0.1 — headless PoC.
 
-## Run the PoC
+## Run the GUI
 
 ```bash
 cd /opt/llmmsg/gtk-chat
-python3 -m llmmsg_chat.cli --agent elazar-whey-gui-w --cwd "$(pwd)"
+python3 -m llmmsg_chat.gui --agent elazar-whey-gui-w --cwd "$(pwd)"
+```
+
+## Run the headless CLI (for protocol testing)
+
+```bash
+python3 -m llmmsg_chat.cli --agent <name> --cwd "$(pwd)"
+
+# non-interactive batch:
+python3 -m llmmsg_chat.cli --agent <name> --cwd /tmp \
+  -c "/online" -c "/send llmmsg-ca hi" --listen 4 --exit
 ```
 
 Env-var overrides: `LLMMSG_AGENT`, `LLMMSG_CWD`, `LLMMSG_HUB_HOST`,
 `LLMMSG_HUB_PORT`. Hub at `127.0.0.1:9701` by default.
 
-Stdlib only. No pip, no venv. Requires python3.11+.
+## Dependencies (Debian 13)
+
+Already in the base install. No pip, no venv:
+- `python3-gi`
+- `gir1.2-gtk-4.0`
+- `gir1.2-adw-1`
 
 ## Layout
 
 - `llmmsg_chat/hub_client.py`
   - `HubClient` — synchronous HTTP for register/send/history/online/roster/guide/aro.
   - `SSEStream` — worker-thread SSE with 60s silence watchdog + auto-reconnect.
-- `llmmsg_chat/cli.py` — headless REPL that wraps both.
+- `llmmsg_chat/cli.py` — headless REPL, also the iteration surface for testing.
+- `llmmsg_chat/gui.py` — `Adw.Application` + `ChatWindow` on top of the same client.
 
 ## Next milestones
 
-- **v0.1** — first GTK window: one room, ListView of messages, Entry for compose.
-- **v0.2** — rooms sidebar (`AdwNavigationSplitView`), `/history` preload on switch.
-- **v0.3** — unread badges, `AdwDialog` for join/leave ARO.
-- **v1.0** — write-through SQLite cache at `~/.local/state/llmmsg-chat-gtk/cache.sqlite`, .deb or dh-python packaging, desktop entry.
+- **v0.2** — `Adw.Toast` surface for errors/status; keyboard shortcuts (Ctrl-N join,
+  Ctrl-W close current room, Tab cycles rooms).
+- **v1.0** — write-through SQLite cache at `~/.local/state/llmmsg-chat-gtk/cache.sqlite`,
+  packaging (.deb or desktop entry), agent-name resolver that reads
+  `/etc/llmmsg/site.conf` for the site suffix.
 
 ## Design notes
 
