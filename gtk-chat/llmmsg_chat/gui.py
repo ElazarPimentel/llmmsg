@@ -10,7 +10,7 @@ Run:
     python3 -m llmmsg_chat.gui --agent elazar-whey-gui-w --cwd "$(pwd)"
 """
 
-VERSION = '0.4.1'
+VERSION = '0.4.2'
 APP_NAME = 'llmmsg-chat'
 
 import argparse
@@ -273,8 +273,8 @@ class ChatWindow(Adw.ApplicationWindow):
         self.room_title = Adw.WindowTitle.new(APP_NAME, f'v{VERSION} · {self.agent}')
         self.content_header.set_title_widget(self.room_title)
 
-        help_btn = Gtk.Button(label='Help', icon_name='help-about-symbolic',
-                              tooltip_text='Help / commands')
+        help_content = Adw.ButtonContent(icon_name='help-browser-symbolic', label='Help')
+        help_btn = Gtk.Button(child=help_content, tooltip_text='Commands / help')
         help_btn.connect('clicked', self._on_help_clicked)
         self.content_header.pack_start(help_btn)
 
@@ -504,41 +504,57 @@ class ChatWindow(Adw.ApplicationWindow):
         return False
 
     def _on_help_clicked(self, _btn):
-        dlg = Adw.AboutWindow(
-            transient_for=self,
-            application_name=APP_NAME,
-            application_icon='mail-message-new-symbolic',
-            version=VERSION,
-            comments=(
-                'GTK client for llmmsg-channel.\n\n'
-                'Compose / keys:\n'
+        win = Adw.Window(transient_for=self, modal=True, title=f'{APP_NAME} — Commands')
+        win.set_default_size(520, 560)
+
+        toolbar = Adw.ToolbarView()
+        header = Adw.HeaderBar()
+        header.set_title_widget(Adw.WindowTitle.new('Commands', f'{APP_NAME} v{VERSION}'))
+        toolbar.add_top_bar(header)
+
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
+                      margin_start=18, margin_end=18,
+                      margin_top=18, margin_bottom=18)
+
+        title = Gtk.Label(label='Commands', xalign=0)
+        title.add_css_class('title-2')
+        box.append(title)
+
+        body = Gtk.Label(
+            label=(
+                'Compose / keys\n'
                 '  Enter — send message\n'
                 '  Shift+Enter — newline inside compose\n'
                 '  Click send icon — send (same as Enter)\n\n'
-                'Joining / leaving AROs:\n'
+                'Joining / leaving AROs\n'
                 '  Sidebar + button — open the join popover\n'
-                '    · pick an existing ARO from the list (✓ = already joined)\n'
-                '    · or type a new name and press Enter / Join\n'
+                '  Pick an existing ARO from the list, or type a new name and press Enter / Join\n'
                 '  Header trash icon — leave the currently selected ARO\n'
-                '  Leaving an ARO removes the room from the sidebar but\n'
-                '    keeps its history in the DB.\n\n'
-                'Rooms / scrolling:\n'
-                '  Click a sidebar row — switch to that room, auto-scroll to\n'
-                '    the newest message\n'
-                '  New incoming messages — auto-scroll if you are already at\n'
-                '    the bottom; stay put if you scrolled up to read history\n'
+                '  Leaving an ARO removes the room from the sidebar; history stays in the DB\n\n'
+                'Rooms / scrolling\n'
+                '  Click a sidebar row — switch to that room and jump to the newest message\n'
+                '  New messages auto-scroll only while you are already at the bottom\n'
+                '  If you scroll up to read history, new messages do not yank the view\n'
                 '  Sidebar badge — unread count for rooms you are not viewing\n\n'
-                'Message routing:\n'
-                '  aro:<name> — group room (all ARO members receive)\n'
-                '  <agent>    — direct message from that agent\n\n'
-                'Exit:\n'
+                'Message routing\n'
+                '  aro:<name> — group room; all ARO members receive the message\n'
+                '  <agent> — direct-message room for that agent\n\n'
+                'Exit\n'
                 '  Window X — cleanly unregisters and closes\n'
-                '  Ctrl+C in the terminal — same clean shutdown\n'
+                '  Ctrl+C in the terminal — same clean shutdown'
             ),
-            developer_name='llmmsg',
-            license_type=Gtk.License.MIT_X11,
+            xalign=0,
+            selectable=True,
+            wrap=True,
         )
-        dlg.present()
+        body.set_wrap_mode(2)  # PANGO_WRAP_WORD_CHAR
+        box.append(body)
+
+        scroll = Gtk.ScrolledWindow(vexpand=True, hexpand=True)
+        scroll.set_child(box)
+        toolbar.set_content(scroll)
+        win.set_content(toolbar)
+        win.present()
 
     def _on_send(self, _widget):
         bucket = self.current_bucket
@@ -626,7 +642,7 @@ class ChatWindow(Adw.ApplicationWindow):
             self.current_bucket = None
             self.chat_stack.set_visible_child_name('__empty__')
             self.room_title.set_title(APP_NAME)
-            self.room_title.set_subtitle(f'v{VERSION} · {self.agent}')
+            self.room_title.set_subtitle(f'{APP_NAME} v{VERSION} · {self.agent}')
         return False
 
     # ------------- SSE event dispatch -------------
