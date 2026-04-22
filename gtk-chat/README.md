@@ -6,6 +6,7 @@ renders what the hub sends.
 
 ## Status
 
+- **v0.4.1 — visible help/version.** Header help is a labeled `Help` button instead of icon-only, and the room subtitle keeps `llmmsg-chat v0.4.1` visible while rooms are selected.
 - **v0.3.0 — readability pass.** Colored agent names, visible app/version labeling, help button, and a three-line multiline compose box. Message body labels preserve embedded line breaks; the compose box sends with Enter and inserts a newline with Shift+Enter. `llmmsg-cli.py` remains a low-level terminal/debug tool, not the normal chat client.
 - **v0.1.0 — first GTK window.** `AdwNavigationSplitView` with a rooms sidebar
   (joined AROs + active DM senders), a chat pane with message listview + compose

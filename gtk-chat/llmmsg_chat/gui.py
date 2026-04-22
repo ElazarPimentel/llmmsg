@@ -10,7 +10,7 @@ Run:
     python3 -m llmmsg_chat.gui --agent elazar-whey-gui-w --cwd "$(pwd)"
 """
 
-VERSION = '0.4.0'
+VERSION = '0.4.1'
 APP_NAME = 'llmmsg-chat'
 
 import argparse
@@ -273,7 +273,7 @@ class ChatWindow(Adw.ApplicationWindow):
         self.room_title = Adw.WindowTitle.new(APP_NAME, f'v{VERSION} · {self.agent}')
         self.content_header.set_title_widget(self.room_title)
 
-        help_btn = Gtk.Button(icon_name='help-about-symbolic',
+        help_btn = Gtk.Button(label='Help', icon_name='help-about-symbolic',
                               tooltip_text='Help / commands')
         help_btn.connect('clicked', self._on_help_clicked)
         self.content_header.pack_start(help_btn)
@@ -440,7 +440,7 @@ class ChatWindow(Adw.ApplicationWindow):
             return
         self.current_bucket = bucket
         self.room_title.set_title(bucket)
-        self.room_title.set_subtitle(f'as {self.agent}')
+        self.room_title.set_subtitle(f'{APP_NAME} v{VERSION} · {self.agent}')
         self.chat_stack.set_visible_child_name(bucket)
         self.unread[bucket] = 0
         self._refresh_badge(bucket)
