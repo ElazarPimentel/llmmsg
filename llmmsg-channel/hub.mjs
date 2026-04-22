@@ -226,13 +226,19 @@ const stmtSearch = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, origin_aro FROM messages
    WHERE body LIKE ? AND retracted_at IS NULL ORDER BY id`
 );
+// ARO fan-out inserts one DB row per recipient for a single logical send
+// (same sender/ts/body/origin_aro/re). Read views that present "recent messages"
+// to a human or LLM collapse those rows via GROUP BY so N-member AROs don't show
+// N duplicates. MIN(id)/MIN(tag)/MIN(recipient) pick an arbitrary representative;
+// callers of these views must not rely on `recipient` identifying a specific
+// delivery.
 const stmtLog = db.prepare(
-  `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM messages ORDER BY id DESC LIMIT ?`
+  `SELECT MIN(id) AS id, sender, MIN(recipient) AS recipient, MIN(tag) AS tag,
+          re, body, retracted_at, origin_aro
+   FROM messages
+   GROUP BY sender, ts, body, origin_aro, re, retracted_at
+   ORDER BY MIN(id) DESC LIMIT ?`
 );
-// ARO history collapses fan-out rows into one logical message: a single ARO send
-// produces one DB row per recipient (same sender, ts, body, origin_aro, re), which
-// would otherwise render as N duplicates in the TUI's room view. Grouping on those
-// fields keeps one representative row (MIN id / tag) per logical message.
 const stmtHistoryAro = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM (
      SELECT MIN(id) AS id, sender, MIN(recipient) AS recipient, MIN(tag) AS tag,
@@ -243,7 +249,7 @@ const stmtHistoryAro = db.prepare(
          origin_aro = ?
          OR re IN (SELECT tag FROM messages WHERE origin_aro = ?)
        )
-     GROUP BY sender, ts, body, origin_aro, re, retracted_at
+     GROUP BY sender, ts, body, origin_aro, re
      ORDER BY MIN(id) DESC LIMIT ?
    ) ORDER BY id`
 );
