@@ -4,7 +4,7 @@ up GTK. Prints events as they arrive, accepts /send /history /online /roster
 /aro /quit commands.
 """
 
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 
 import argparse
 import os
@@ -12,6 +12,7 @@ import queue
 import signal
 import sys
 import threading
+import time
 from typing import Optional
 
 from .hub_client import HubClient, HubError, SSEStream
@@ -41,6 +42,16 @@ def main() -> int:
     parser.add_argument('--host', default=os.environ.get('LLMMSG_HUB_HOST', '127.0.0.1'))
     parser.add_argument('--port', type=int,
                         default=int(os.environ.get('LLMMSG_HUB_PORT', '9701')))
+    parser.add_argument('-c', '--command', action='append', default=[],
+                        help='Run a command string non-interactively '
+                             '(e.g. "/online"). Repeatable. Implies --exit '
+                             'after all commands and --listen window complete.')
+    parser.add_argument('--listen', type=float, default=0.0,
+                        help='When --command is used, keep the SSE stream '
+                             'open this many seconds after the last command '
+                             'to capture incoming events.')
+    parser.add_argument('--exit', dest='exit_after', action='store_true',
+                        help='Exit after --command batch (implied when -c used).')
     args = parser.parse_args()
 
     if not args.agent:
@@ -75,11 +86,14 @@ def main() -> int:
     def shutdown(*_args):
         sys.stdout.write('\n[shutdown] unregistering...\n')
         sys.stdout.flush()
+        # Stop the SSE worker first so its readline returns on our terms (flag
+        # already set, close() triggered), before /unregister makes the hub
+        # close our stream from its side (which would race-print a noisy error).
+        sse.stop()
         try:
             client.unregister(args.agent)
         except Exception as exc:
             sys.stderr.write(f'unregister failed: {exc}\n')
-        sse.stop()
         os._exit(0)
 
     signal.signal(signal.SIGINT, shutdown)
@@ -89,6 +103,22 @@ def main() -> int:
         target=_printer, args=(events_q, args.agent), name='cli-printer', daemon=True,
     )
     printer.start()
+
+    if args.command or args.exit_after:
+        for cmd in args.command:
+            sys.stdout.write(f'> {cmd}\n')
+            try:
+                _handle(cmd.strip(), client, args.agent, shutdown)
+            except HubError as exc:
+                sys.stdout.write(f'error: {exc}\n')
+            except Exception as exc:
+                sys.stdout.write(f'client error: {exc}\n')
+        if args.listen > 0:
+            sys.stdout.write(f'  · listening {args.listen:.0f}s for incoming events...\n')
+            sys.stdout.flush()
+            time.sleep(args.listen)
+        shutdown()
+        return 0
 
     _repl(client, args.agent, shutdown)
     return 0

@@ -12,7 +12,7 @@ thread boundary: when SSEStream fires on_event from the worker, the UI side is
 responsible for dispatching back to its main thread.
 """
 
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 
 import http.client
 import json
@@ -166,8 +166,17 @@ class SSEStream:
         while not self._stop.is_set():
             try:
                 self._stream_once()
+            except AttributeError:
+                # http.client's HTTPResponse.read*() raises AttributeError on a
+                # response whose underlying socket was closed from another
+                # thread (fp becomes None). Treat as a clean disconnect.
+                pass
+            except (OSError, HubError) as exc:
+                if not self._stop.is_set():
+                    self.on_status(f'sse error: {exc}')
             except Exception as exc:
-                self.on_status(f'sse error: {exc}')
+                if not self._stop.is_set():
+                    self.on_status(f'sse error: {exc}')
             if self._stop.is_set():
                 return
             self.on_status(f'sse reconnect in {self.BACKOFF:.0f}s')
@@ -175,38 +184,51 @@ class SSEStream:
 
     def _stream_once(self) -> None:
         q = urllib.parse.urlencode({'agent': self.agent, 'cwd': self.cwd})
-        self._conn = http.client.HTTPConnection(self.host, self.port, timeout=None)
-        self._conn.request('GET', f'/connect?{q}')
-        resp = self._conn.getresponse()
+        conn = http.client.HTTPConnection(self.host, self.port, timeout=None)
+        self._conn = conn
+        conn.request('GET', f'/connect?{q}')
+        resp = conn.getresponse()
         if resp.status != 200:
             raise HubError(f'/connect -> {resp.status}')
         self.on_status(f'sse connected as {self.agent}')
         self._last_bytes = time.monotonic()
 
-        watchdog = threading.Thread(target=self._watchdog, name='sse-watchdog', daemon=True)
+        # Per-connection watchdog cancel flag. Each _stream_once has its own so
+        # an old watchdog from a dead connection cannot affect a reconnect.
+        wd_cancel = threading.Event()
+        watchdog = threading.Thread(
+            target=self._watchdog, args=(conn, wd_cancel),
+            name='sse-watchdog', daemon=True,
+        )
         watchdog.start()
 
-        buf = b''
+        buf: list[str] = []
         try:
             while not self._stop.is_set():
-                chunk = resp.read(4096)
-                if not chunk:
+                # readline() returns each \n-terminated line as soon as the hub
+                # flushes it, so the 25s ping frames land immediately. A full
+                # empty line (\n) marks end of frame; b'' means EOF.
+                line = resp.readline()
+                if line == b'':
                     raise HubError('sse end-of-stream')
                 self._last_bytes = time.monotonic()
-                buf += chunk
-                # SSE frames are separated by a blank line (\n\n)
-                while b'\n\n' in buf:
-                    frame, buf = buf.split(b'\n\n', 1)
-                    self._dispatch_frame(frame.decode('utf-8', errors='replace'))
+                if line in (b'\n', b'\r\n'):
+                    if buf:
+                        self._dispatch_frame(''.join(buf))
+                        buf = []
+                    continue
+                buf.append(line.decode('utf-8', errors='replace'))
         finally:
+            wd_cancel.set()
             try:
                 resp.close()
             except Exception:
                 pass
             try:
-                if self._conn:
-                    self._conn.close()
-            finally:
+                conn.close()
+            except Exception:
+                pass
+            if self._conn is conn:
                 self._conn = None
 
     def _dispatch_frame(self, frame_text: str) -> None:
@@ -223,19 +245,17 @@ class SSEStream:
             except Exception as exc:
                 self.on_status(f'handler error: {exc}')
 
-    def _watchdog(self) -> None:
-        # Wake every 15s; if the read side has been quiet for >IDLE_TIMEOUT,
-        # destroy the socket so _stream_once errors and _run reconnects.
-        while not self._stop.is_set():
-            self._stop.wait(15.0)
-            if self._stop.is_set():
-                return
-            if self._conn is None:
+    def _watchdog(self, conn: http.client.HTTPConnection, cancel: threading.Event) -> None:
+        # Tick every 15s. Exit cleanly when (a) stop flag set, (b) per-connection
+        # cancel fires because _stream_once finished, or (c) idle-threshold hit.
+        while not self._stop.is_set() and not cancel.is_set():
+            cancel.wait(15.0)
+            if self._stop.is_set() or cancel.is_set():
                 return
             if time.monotonic() - self._last_bytes > self.IDLE_TIMEOUT:
                 self.on_status(f'sse idle >{self.IDLE_TIMEOUT:.0f}s, forcing reconnect')
                 try:
-                    self._conn.close()
+                    conn.close()
                 except Exception:
                     pass
                 return
