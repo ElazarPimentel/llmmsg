@@ -74,7 +74,7 @@ db.pragma('busy_timeout = 5000');
   }
 }
 
-// Migrations: add columns if missing
+// Migrations: add columns if missing, install/refresh views
 for (const migration of [
   `ALTER TABLE roster ADD COLUMN last_seen_at INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE messages ADD COLUMN origin_tag TEXT`,
@@ -88,6 +88,25 @@ for (const migration of [
      message TEXT    NOT NULL
    )`,
   `CREATE INDEX IF NOT EXISTS idx_hub_log_ts ON hub_log(ts)`,
+  // Views: DROP + CREATE on every start so definition changes propagate
+  // without a separate migration step. Keep their SQL as the single source
+  // of truth for fan-out collapse and online membership.
+  `DROP VIEW IF EXISTS v_logical_messages`,
+  `CREATE VIEW v_logical_messages AS
+     SELECT MIN(id) AS id, sender, MIN(recipient) AS recipient, MIN(tag) AS tag,
+            re, body, retracted_at, origin_aro, ts
+     FROM messages
+     GROUP BY sender, ts, body, origin_aro, re, retracted_at`,
+  `DROP VIEW IF EXISTS v_roster_online`,
+  `CREATE VIEW v_roster_online AS
+     SELECT agent, cwd, last_seen_at
+     FROM roster
+     WHERE last_seen_at > strftime('%s','now') - 30`,
+  `DROP VIEW IF EXISTS v_aro_members_online`,
+  `CREATE VIEW v_aro_members_online AS
+     SELECT a.aro, a.agent, r.cwd, r.last_seen_at
+     FROM aros a
+     INNER JOIN v_roster_online r ON r.agent = a.agent`,
 ]) {
   try { db.exec(migration); }
   catch (error) { if (!String(error.message).includes('duplicate column name')) throw error; }
@@ -226,31 +245,25 @@ const stmtSearch = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, origin_aro FROM messages
    WHERE body LIKE ? AND retracted_at IS NULL ORDER BY id`
 );
-// ARO fan-out inserts one DB row per recipient for a single logical send
-// (same sender/ts/body/origin_aro/re). Read views that present "recent messages"
-// to a human or LLM collapse those rows via GROUP BY so N-member AROs don't show
-// N duplicates. MIN(id)/MIN(tag)/MIN(recipient) pick an arbitrary representative;
-// callers of these views must not rely on `recipient` identifying a specific
-// delivery.
+// v_logical_messages is the single source of truth for "one row per logical
+// message" — ARO fan-out rows (same sender/ts/body/origin_aro/re) collapse to
+// one row via MIN aggregation. Both stmtLog and stmtHistoryAro read through it.
+// Callers must not rely on `recipient` identifying a specific delivery.
 const stmtLog = db.prepare(
-  `SELECT MIN(id) AS id, sender, MIN(recipient) AS recipient, MIN(tag) AS tag,
-          re, body, retracted_at, origin_aro
-   FROM messages
-   GROUP BY sender, ts, body, origin_aro, re, retracted_at
-   ORDER BY MIN(id) DESC LIMIT ?`
+  `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro
+   FROM v_logical_messages
+   ORDER BY id DESC LIMIT ?`
 );
 const stmtHistoryAro = db.prepare(
   `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM (
-     SELECT MIN(id) AS id, sender, MIN(recipient) AS recipient, MIN(tag) AS tag,
-            re, body, retracted_at, origin_aro
-     FROM messages
+     SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro
+     FROM v_logical_messages
      WHERE retracted_at IS NULL
        AND (
          origin_aro = ?
          OR re IN (SELECT tag FROM messages WHERE origin_aro = ?)
        )
-     GROUP BY sender, ts, body, origin_aro, re
-     ORDER BY MIN(id) DESC LIMIT ?
+     ORDER BY id DESC LIMIT ?
    ) ORDER BY id`
 );
 const stmtHistoryDm = db.prepare(
@@ -263,19 +276,13 @@ const stmtHistoryDm = db.prepare(
    ) ORDER BY id`
 );
 const stmtCheckRoster = db.prepare(`SELECT 1 FROM roster WHERE agent = ?`);
-const stmtCheckOnline = db.prepare(
-  `SELECT 1 FROM roster WHERE agent = ? AND last_seen_at > strftime('%s','now') - 30`
-);
+const stmtCheckOnline = db.prepare(`SELECT 1 FROM v_roster_online WHERE agent = ?`);
 const stmtCheckTag = db.prepare(`SELECT 1 FROM messages WHERE tag = ?`);
 // ARO fanout only targets agents seen in the last 30s (bridge heartbeats every 2s) or with an active SSE connection.
 // Agents that went offline without unregistering are excluded after 30s of inactivity.
 const stmtAroMembersAll = db.prepare(`SELECT agent FROM aros WHERE aro = ? ORDER BY agent`);
 const stmtAroMembersActive = db.prepare(
-  `SELECT a.agent FROM aros a
-   INNER JOIN roster r ON r.agent = a.agent
-   WHERE a.aro = ?
-     AND r.last_seen_at > strftime('%s','now') - 30
-   ORDER BY a.agent`
+  `SELECT agent FROM v_aro_members_online WHERE aro = ? ORDER BY agent`
 );
 
 function activeAroMembers(aroName, excludeAgent = null) {

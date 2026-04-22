@@ -245,6 +245,25 @@ FROM messages
 WHERE retracted_at IS NULL
 GROUP BY sender
 ORDER BY total DESC;
+
+-- Operational views used by hub.mjs. ARO fan-out collapse, online-roster filter,
+-- and ARO × online-roster join live here so JS can stay thin and the same
+-- definitions can be queried ad-hoc from sqlite3.
+CREATE VIEW v_logical_messages AS
+SELECT MIN(id) AS id, sender, MIN(recipient) AS recipient, MIN(tag) AS tag,
+       re, body, retracted_at, origin_aro, ts
+FROM messages
+GROUP BY sender, ts, body, origin_aro, re, retracted_at;
+
+CREATE VIEW v_roster_online AS
+SELECT agent, cwd, last_seen_at
+FROM roster
+WHERE last_seen_at > strftime('%s','now') - 30;
+
+CREATE VIEW v_aro_members_online AS
+SELECT a.aro, a.agent, r.cwd, r.last_seen_at
+FROM aros a
+INNER JOIN v_roster_online r ON r.agent = a.agent;
 SQL
 
 echo "Created $DB"
