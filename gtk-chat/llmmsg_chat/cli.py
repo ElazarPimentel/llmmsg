@@ -4,7 +4,7 @@ up GTK. Prints events as they arrive, accepts /send /history /online /roster
 /aro /quit commands.
 """
 
-VERSION = '0.0.2'
+VERSION = '0.0.3'
 
 import argparse
 import os
@@ -234,7 +234,7 @@ def _handle(line: str, client: HubClient, agent: str, shutdown) -> None:
             sys.stdout.write('usage: /send <target> <text>\n')
             return
         target, text = parts[1], parts[2]
-        result = client.send(agent, target, {'message': text})
+        result = client.send(agent, target, text)
         tag = result.get('tag') or result.get('tags') or result.get('ids')
         sys.stdout.write(f'  sent: tag={tag}\n')
         return

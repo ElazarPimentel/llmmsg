@@ -10,7 +10,7 @@ Run:
     python3 -m llmmsg_chat.gui --agent elazar-whey-gui-w --cwd "$(pwd)"
 """
 
-VERSION = '0.4.2'
+VERSION = '0.4.3'
 APP_NAME = 'llmmsg-chat'
 
 import argparse
@@ -570,7 +570,11 @@ class ChatWindow(Adw.ApplicationWindow):
         target = bucket
         def work():
             try:
-                result = self.client.send(self.agent, target, {'message': text})
+                # Send body as plain string per guide v2.6 rule 13 — the hub
+                # stores text verbatim; wrapping in {'message': text} would make
+                # the sender trip the v4.3 wrapper-nudge and be stored as a
+                # JSON-stringified wrapper for receivers.
+                result = self.client.send(self.agent, target, text)
                 # Optimistic local add so user sees their line immediately.
                 # The SSE round-trip (for AROs) will not re-deliver to sender.
                 msg = Message(

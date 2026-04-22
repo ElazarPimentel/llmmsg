@@ -12,7 +12,7 @@ thread boundary: when SSEStream fires on_event from the worker, the UI side is
 responsible for dispatching back to its main thread.
 """
 
-VERSION = '0.0.3'
+VERSION = '0.0.4'
 
 import http.client
 import json
@@ -70,7 +70,11 @@ class HubClient:
     def unregister(self, agent: str) -> dict:
         return self._request('POST', '/unregister', {'agent': agent}) or {}
 
-    def send(self, from_: str, to: str, message, re: Optional[str] = None) -> dict:
+    def send(self, from_: str, to: str, message: str, re: Optional[str] = None) -> dict:
+        """Send a llmmsg-channel message. `message` must be a plain string
+        per guide rule 13 — do NOT pass `{'message': text}` or any other
+        wrapper object; the hub will detect that as the legacy form, unwrap
+        it, and push a corrective nudge back to this sender."""
         body = {'from': from_, 'to': to, 'message': message}
         if re:
             body['re'] = re
