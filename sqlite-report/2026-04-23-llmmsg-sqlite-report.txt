@@ -1,0 +1,302 @@
+daily-comms-audit.sh v1.7
+Report file: /opt/llmmsg/sqlite-report/2026-04-23-llmmsg-sqlite-report.txt
+
+=== Last 24h Communications Audit ===
+Median avg chars/message: 545.0
+Average avg chars/message: 635.0
+
+--- Per-Agent Efficiency ---
+sender                      msgs  avg_chars  max_chars  total_chars  est_tokens  replies  initiated  avg_reply_chars  avg_init_chars  over_2k  has_summary_and_details  has_summary_and_message
+--------------------------  ----  ---------  ---------  -----------  ----------  -------  ---------  ---------------  --------------  -------  -----------------------  -----------------------
+mars-pm-cc-w                242   771.0      3135       186659       46665.0     236      6          772.0            754.0           7        0                        0                      
+system                      49    2943.0     4204       144188       36047.0     0        49                          2943.0          33       0                        0                      
+pluto-pm-cc-w               143   707.0      2180       101060       25265.0     136      7          726.0            335.0           2        0                        0                      
+pluto-coder-cc-w            124   660.0      2119       81817        20454.0     124      0          660.0                            6        0                        0                      
+mars-db-cc-w                120   607.0      1333       72866        18217.0     120      0          607.0                            0        0                        0                      
+mars-coder-cc-w             149   421.0      1620       62658        15665.0     149      0          421.0                            0        0                        0                      
+mars-coderhelp-w            97    638.0      1876       61893        15473.0     96       1          644.0            57.0            0        0                        0                      
+elazar-whey-gui-w           232   265.0      1298       61460        15365.0     0        232                         265.0           0        0                        0                      
+llmmsg-cc                   70    416.0      1956       29093        7273.0      70       0          416.0                            0        0                        0                      
+llmmsg-ca                   77    342.0      1243       26306        6577.0      74       3          347.0            216.0           0        0                        0                      
+pluto-audit-ca-w            61    412.0      1255       25117        6279.0      55       6          450.0            60.0            0        0                        0                      
+ecogift-php-hostinger-temp  28    655.0      1170       18349        4587.0      27       1          642.0            1015.0          0        0                        0                      
+pluto-db-cc-w               32    545.0      2012       17425        4356.0      31       1          497.0            2012.0          1        0                        0                      
+pluto-coderhelp-w           37    399.0      794        14754        3689.0      36       1          409.0            38.0            0        0                        0                      
+mars-coderhelp-cc-w         15    551.0      685        8270         2068.0      15       0          551.0                            0        0                        0                      
+sh-cc-w                     28    175.0      516        4899         1225.0      28       0          175.0                            0        0                        0                      
+llmmsg-cc-l                 6     292.0      1148       1752         438.0       1        5          1148.0           121.0           0        0                        0                      
+
+--- Top Conversation Pairs ---
+pair                                 msgs  chars  est_tokens
+-----------------------------------  ----  -----  ----------
+mars-pm-cc-w -> elazar-whey-gui-w    46    37127  9282.0    
+mars-pm-cc-w -> mars-audit-ca-w      40    30487  7622.0    
+mars-pm-cc-w -> mars-coder-cc-w      40    30487  7622.0    
+mars-pm-cc-w -> mars-coderhelp-cc-w  40    30487  7622.0    
+mars-pm-cc-w -> mars-db-cc-w         40    30487  7622.0    
+mars-pm-cc-w -> mars-coderhelp-w     30    20944  5236.0    
+pluto-pm-cc-w -> elazar-whey-gui-w   27    19204  4801.0    
+system -> fom-cc-w                   4     16816  4204.0    
+
+--- Flagged: Messages over 2000 chars ---
+id    sender            recipient                   tag                    chars  preview                                                                         
+----  ----------------  --------------------------  ---------------------  -----  --------------------------------------------------------------------------------
+5753  system            mars-coderhelp-w            system-5753            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+5754  system            mars-pm-cc-w                system-5754            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+5755  system            mars-coder-cc-w             system-5755            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+5756  system            elazar-whey-gui-w           system-5756            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+5757  system            fom-cc-w                    system-5757            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+5758  system            fom-cc-w                    system-5758            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+5835  system            mars-coder-cc-w             system-5835            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+5872  system            mars-coderhelp-w            system-5872            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6344  system            fom-cc-w                    system-6344            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6345  system            pluto-pm-cc-w               system-6345            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6346  system            pluto-coder-cc-w            system-6346            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6347  system            pluto-db-cc-w               system-6347            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6360  system            kidsclubcafe-com-ar         system-6360            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6398  system            pluto-db-cc-w               system-6398            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6399  system            pluto-pm-cc-w               system-6399            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6487  system            pluto-coder-cc-w            system-6487            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6488  system            fom-cc-w                    system-6488            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6489  system            fom-w                       system-6489            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6490  system            llmmsg-ca                   system-6490            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6491  system            llmmsg-cc                   system-6491            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6492  system            llmmsg-ca                   system-6492            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6493  system            llmmsg-cc                   system-6493            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6518  system            elazar-whey-gui-w           system-6518            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6658  system            pluto-audit-ca-w            system-6658            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6659  system            pluto-audit-ca-w            system-6659            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6661  system            pluto-audit-ca-w            system-6661            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6662  system            pluto-audit-ca-w            system-6662            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6664  system            sh-cc-w                     system-6664            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6665  system            sh-cc-w                     system-6665            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6666  system            ecogift-php-hostinger-temp  system-6666            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6765  system            pluto-coderhelp-w           system-6765            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6766  system            pluto-coderhelp-w           system-6766            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+6767  system            pluto-coderhelp-w           system-6767            4204   Messaging guide v2.9:                                                           
+                                                                                  llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                  
+                                                                                  Audience: LLM agent                                                             
+
+5780  mars-pm-cc-w      elazar-whey-gui-w           mars-pm-cc-w-5780      3135   pilla — diagnosis from code read + UI output:                                   
+                                                                                                                                                                  
+                                                                                  root cause: pilla's users row has                                               
+
+5781  mars-pm-cc-w      mars-audit-ca-w             mars-pm-cc-w-5781      3135   pilla — diagnosis from code read + UI output:                                   
+                                                                                                                                                                  
+                                                                                  root cause: pilla's users row has                                               
+
+5782  mars-pm-cc-w      mars-coder-cc-w             mars-pm-cc-w-5782      3135   pilla — diagnosis from code read + UI output:                                   
+                                                                                                                                                                  
+                                                                                  root cause: pilla's users row has                                               
+
+5783  mars-pm-cc-w      mars-coderhelp-cc-w         mars-pm-cc-w-5783      3135   pilla — diagnosis from code read + UI output:                                   
+                                                                                                                                                                  
+                                                                                  root cause: pilla's users row has                                               
+
+5784  mars-pm-cc-w      mars-db-cc-w                mars-pm-cc-w-5784      3135   pilla — diagnosis from code read + UI output:                                   
+                                                                                                                                                                  
+                                                                                  root cause: pilla's users row has                                               
+
+6987  pluto-pm-cc-w     elazar-whey-gui-w           pluto-pm-cc-w-6987     2180   analysis — concrete moves:                                                      
+                                                                                                                                                                  
+                                                                                  1) NEW `shared/md/evolutiva-pm-commons.md` (PM-only,                            
+
+6988  pluto-pm-cc-w     mars-pm-cc-w                pluto-pm-cc-w-6988     2180   analysis — concrete moves:                                                      
+                                                                                                                                                                  
+                                                                                  1) NEW `shared/md/evolutiva-pm-commons.md` (PM-only,                            
+
+6974  mars-pm-cc-w      elazar-whey-gui-w           mars-pm-cc-w-6974      2138   analysis of mars + pluto md files. duplicated content across both projects that 
+
+6975  mars-pm-cc-w      pluto-pm-cc-w               mars-pm-cc-w-6975      2138   analysis of mars + pluto md files. duplicated content across both projects that 
+
+6408  pluto-coder-cc-w  elazar-whey-gui-w           pluto-coder-cc-w-6408  2119   coder take:                                                                     
+                                                                                                                                                                  
+                                                                                  i) Role logic — partial mismatch vs your model. src/lib/access-scop             
+
+6409  pluto-coder-cc-w  pluto-audit-ca-w            pluto-coder-cc-w-6409  2119   coder take:                                                                     
+                                                                                                                                                                  
+                                                                                  i) Role logic — partial mismatch vs your model. src/lib/access-scop             
+
+6410  pluto-coder-cc-w  pluto-coder-ca-w            pluto-coder-cc-w-6410  2119   coder take:                                                                     
+                                                                                                                                                                  
+                                                                                  i) Role logic — partial mismatch vs your model. src/lib/access-scop             
+
+6411  pluto-coder-cc-w  pluto-coderhelp-cc-w        pluto-coder-cc-w-6411  2119   coder take:                                                                     
+                                                                                                                                                                  
+                                                                                  i) Role logic — partial mismatch vs your model. src/lib/access-scop             
+
+6412  pluto-coder-cc-w  pluto-db-cc-w               pluto-coder-cc-w-6412  2119   coder take:                                                                     
+                                                                                                                                                                  
+                                                                                  i) Role logic — partial mismatch vs your model. src/lib/access-scop             
+
+6413  pluto-coder-cc-w  pluto-pm-cc-w               pluto-coder-cc-w-6413  2119   coder take:                                                                     
+                                                                                                                                                                  
+                                                                                  i) Role logic — partial mismatch vs your model. src/lib/access-scop             
+
+6465  pluto-db-cc-w     pluto-pm-cc-w               pluto-db-cc-w-6465     2012   DDL proposal (DM per your ask, fresh tag since hub rejects DM re to ARO tags):  
+                                                                                                                                                                  
+
+--- Flagged: Duplicate summary+details pattern ---
+
+--- Flagged: Agents 2x above median avg chars ---
+sender  msgs  avg_chars  vs_median
+------  ----  ---------  ---------
+system  49    2943.0     5.4      
+
+--- Flagged: One-off type values (used only once in 24h) ---
+
+--- Summary ---
+{"period":"24h","total_messages":1510,"total_chars":918566,"est_tokens":229642.0,"median_avg_chars":545.0,"agents_above_2x_median":1}
+
+--- Comparison vs Last Audit (2026-04-22 04:53:25, guide v2.7) ---
+agent                       msgs_now  msgs_prev  msgs_delta  avg_now  avg_prev  avg_delta  tok_now  tok_prev  tok_delta  big_now  big_prev
+--------------------------  --------  ---------  ----------  -------  --------  ---------  -------  --------  ---------  -------  --------
+system                      49        28         21          2943.0   2044.0    899.0      36047.0  14310.0   21737.0    33       17      
+mars-pm-cc-w                242       298        -56         771.0    335.0     436.0      46665.0  24948.0   21717.0    7        6       
+mars-coderhelp-w            97        0          97          638.0    0         638.0      15473.0  0         15473.0    0        0       
+pluto-audit-ca-w            61        0          61          412.0    0         412.0      6279.0   0         6279.0     0        0       
+ecogift-php-hostinger-temp  28        0          28          655.0    0         655.0      4587.0   0         4587.0     0        0       
+pluto-coderhelp-w           37        0          37          399.0    0         399.0      3689.0   0         3689.0     0        0       
+pluto-coder-cc-w            124       42         82          660.0    1692.0    -1032.0    20454.0  17763.0   2691.0     6        9       
+elazar-whey-gui-w           232       161        71          265.0    324.0     -59.0      15365.0  13058.0   2307.0     0        4       
+mars-coderhelp-cc-w         15        0          15          551.0    0         551.0      2068.0   0         2068.0     0        0       
+llmmsg-ca                   77        64         13          342.0    290.0     52.0       6577.0   4641.0    1936.0     0        0       
+llmmsg-cc-l                 6         0          6           292.0    0         292.0      438.0    0         438.0      0        0       
+mars-db-cc-w                120       281        -161        607.0    316.0     291.0      18217.0  22213.0   -3996.0    0        0       
+sh-cc-w                     28        54         -26         175.0    537.0     -362.0     1225.0   7244.0    -6019.0    0        0       
+mars-coder-cc-w             149       172        -23         421.0    561.0     -140.0     15665.0  24144.0   -8479.0    0        6       
+llmmsg-cc                   70        110        -40         416.0    576.0     -160.0     7273.0   15837.0   -8564.0    0        0       
+pluto-pm-cc-w               143       57         86          707.0    2766.0    -2059.0    25265.0  39416.0   -14151.0   2        36      
+pluto-db-cc-w               32        60         -28         545.0    1870.0    -1325.0    4356.0   28048.0   -23692.0   1        15      
+
+
+Audit snapshot saved (guide v2.9)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="1.7"
+VERSION="1.8"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
 REPORT_DIR="${LLMMSG_REPORT_DIR:-/opt/llmmsg/sqlite-report}"
@@ -280,3 +280,14 @@ if (( REPORT_DIR_KB >= 10240 )); then
     REPORT_DIR_MB=$(awk "BEGIN { printf \"%.1f\", $REPORT_DIR_KB / 1024 }")
     echo "WARNING: $REPORT_DIR is ${REPORT_DIR_MB} MB. Consider cleaning old reports."
 fi
+
+cat <<'LLM_INVOKER_WORKFLOW'
+
+--- NEXT STEPS FOR LLM AGENT ---
+If you ran this script on behalf of aro:llmmsg-coders, proceed as follows:
+  1. Post the report path above to aro:llmmsg-coders via the `send` tool.
+  2. llmmsg-ca and llmmsg-cc each analyze the report independently.
+  3. llmmsg-ca posts its analysis first, llmmsg-cc second.
+  4. Reconcile the two analyses into one agreed report.
+  5. llmmsg-cc posts the final agreed report to Elazar.
+LLM_INVOKER_WORKFLOW

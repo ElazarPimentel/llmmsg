@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '4.5';
+const VERSION = '4.7';
 const LENGTH_NUDGE_THRESHOLD = 1500;
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
@@ -89,6 +89,10 @@ for (const migration of [
      message TEXT    NOT NULL
    )`,
   `CREATE INDEX IF NOT EXISTS idx_hub_log_ts ON hub_log(ts)`,
+  `CREATE TABLE IF NOT EXISTS guide_delivered (
+     agent         TEXT PRIMARY KEY,
+     guide_version TEXT NOT NULL
+   )`,
   // Views: DROP + CREATE on every start so definition changes propagate
   // without a separate migration step. Keep their SQL as the single source
   // of truth for fan-out collapse and online membership.
@@ -209,10 +213,10 @@ function safeParse(str) {
 // it in normalizeBody before this INSERT runs.
 const stmtInsertMsg = db.prepare(
   `INSERT INTO messages (sender, recipient, re, body, origin_aro)
-   VALUES (?, ?, ?, ?, ?) RETURNING id, tag`
+   VALUES (?, ?, ?, ?, ?) RETURNING id, tag, ts`
 );
 const stmtMessagesSince = db.prepare(
-  `SELECT id, sender, recipient, tag, re, body, origin_aro FROM messages
+  `SELECT id, sender, recipient, tag, re, body, origin_aro, ts FROM messages
    WHERE (recipient = ? OR recipient = '*') AND id > ? AND retracted_at IS NULL ORDER BY id`
 );
 const stmtUnreadCount = db.prepare(
@@ -241,12 +245,12 @@ const stmtThread = db.prepare(
      UNION
      SELECT m.tag FROM messages m JOIN thread_tags tt ON m.re = tt.t
    )
-   SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM messages
+   SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro, ts FROM messages
    WHERE tag IN (SELECT t FROM thread_tags) OR re IN (SELECT t FROM thread_tags)
    ORDER BY id`
 );
 const stmtSearch = db.prepare(
-  `SELECT id, sender, recipient, tag, re, body, origin_aro FROM messages
+  `SELECT id, sender, recipient, tag, re, body, origin_aro, ts FROM messages
    WHERE body LIKE ? AND retracted_at IS NULL ORDER BY id`
 );
 // v_logical_messages is the single source of truth for "one row per logical
@@ -254,13 +258,13 @@ const stmtSearch = db.prepare(
 // one row via MIN aggregation. Both stmtLog and stmtHistoryAro read through it.
 // Callers must not rely on `recipient` identifying a specific delivery.
 const stmtLog = db.prepare(
-  `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro
+  `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro, ts
    FROM v_logical_messages
    ORDER BY id DESC LIMIT ?`
 );
 const stmtHistoryAro = db.prepare(
-  `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM (
-     SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro
+  `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro, ts FROM (
+     SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro, ts
      FROM v_logical_messages
      WHERE retracted_at IS NULL
        AND (
@@ -271,8 +275,8 @@ const stmtHistoryAro = db.prepare(
    ) ORDER BY id`
 );
 const stmtHistoryDm = db.prepare(
-  `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM (
-     SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro FROM messages
+  `SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro, ts FROM (
+     SELECT id, sender, recipient, tag, re, body, retracted_at, origin_aro, ts FROM messages
      WHERE origin_aro IS NULL
        AND ((sender = ? AND recipient = ?) OR (sender = ? AND recipient = ?))
        AND retracted_at IS NULL
@@ -308,6 +312,11 @@ const stmtGetConfig = db.prepare(`SELECT value, version, updated_at FROM config 
 const stmtSetConfig = db.prepare(
   `INSERT INTO config (key, value, version, updated_at) VALUES (?, ?, ?, strftime('%s','now'))
    ON CONFLICT(key) DO UPDATE SET value = excluded.value, version = excluded.version, updated_at = strftime('%s','now')`
+);
+const stmtGetGuideDelivered = db.prepare(`SELECT guide_version FROM guide_delivered WHERE agent = ?`);
+const stmtSetGuideDelivered = db.prepare(
+  `INSERT INTO guide_delivered (agent, guide_version) VALUES (?, ?)
+   ON CONFLICT(agent) DO UPDATE SET guide_version = excluded.guide_version`
 );
 
 // --- Multi-site: remote hub forwarding ---
@@ -424,7 +433,7 @@ function pollForDirectWrites() {
     let maxId = cursorId;
     for (const r of rows) {
       if (r.id > maxId) maxId = r.id;
-      const event = { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
+      const event = { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null, ts: r.ts };
       sendToChannel(agent, event);
     }
     // sendToChannel already handles cursor for non-bridged agents
@@ -523,11 +532,11 @@ function isWrappedMessage(raw) {
 // TUI/agents can reconstruct room attribution for ARO fanout messages.
 const sendMessage = db.transaction((sender, recipient, reTag, body, originAro = null) => {
   const row = stmtInsertMsg.get(sender, recipient, reTag || null, body, originAro || null);
-  const { id, tag } = row;
+  const { id, tag, ts } = row;
 
   const event = {
     id, from: sender, to: recipient, tag, re: reTag || null,
-    body, origin_aro: originAro || null,
+    body, origin_aro: originAro || null, ts,
   };
 
   if (recipient === '*') {
@@ -547,7 +556,7 @@ function readMessages(agent) {
   let maxId = cursorId;
   const messages = rows.map(r => {
     if (r.id > maxId) maxId = r.id;
-    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
+    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null, ts: r.ts };
   });
 
   if (maxId > cursorId) {
@@ -561,7 +570,7 @@ function getUnreadMessages(agent) {
   const cursorRow = stmtGetCursor.get(agent);
   const cursorId = cursorRow ? cursorRow.read_id : 0;
   return stmtMessagesSince.all(agent, cursorId).map((r) => {
-    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
+    return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null, ts: r.ts };
   });
 }
 
@@ -734,16 +743,21 @@ const server = http.createServer(async (req, res) => {
         stmtRegister.run('system', '/opt/llmmsg');
       }
 
-      // Push the current messaging guide on EVERY /register, not just the
-      // first one. Guide text changes over time (rule additions, wording
-      // tightening) and long-running agents re-register rarely; gating this
-      // on isFirstTimeRegister meant post-v2.5 updates never reached any
-      // agent that had ever registered before. System DM is cheap, and
-      // agents who already have the latest text will just see a fresh copy.
+      // Push the current messaging guide on /register only when the agent
+      // has never received this version. Tracked in guide_delivered (agent
+      // PK, guide_version). On version bump, every agent gets it once on
+      // its next register; repeat registers of the same version are silent.
+      // Cuts the dominant `system` token spend flagged by KPI v1.8.
       const guideRow = stmtGetConfig.get('message_guide');
       if (guideRow && guideRow.value) {
-        const guideText = `Messaging guide v${guideRow.version}:\n${guideRow.value}`;
-        try { sendMessage('system', agent, null, guideText); } catch {}
+        const delivered = stmtGetGuideDelivered.get(agent);
+        if (!delivered || delivered.guide_version !== guideRow.version) {
+          const guideText = `Messaging guide v${guideRow.version}:\n${guideRow.value}`;
+          try {
+            sendMessage('system', agent, null, guideText);
+            stmtSetGuideDelivered.run(agent, guideRow.version);
+          } catch {}
+        }
       }
 
       // Migrate SSE connection from old_agent (may be an unregistered-* alias) to new agent name
@@ -1048,8 +1062,8 @@ const server = http.createServer(async (req, res) => {
       if (!tag) { res.writeHead(400); res.end(JSON.stringify({ error: 'missing tag' })); return; }
       const rows = stmtThread.all(tag);
       const messages = rows.map(r => {
-        if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null };
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
+        if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null, ts: r.ts };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null, ts: r.ts };
       });
       res.end(JSON.stringify(messages));
       return;
@@ -1060,7 +1074,7 @@ const server = http.createServer(async (req, res) => {
       if (!text) { res.writeHead(400); res.end(JSON.stringify({ error: 'missing q' })); return; }
       const rows = stmtSearch.all(`%${text}%`);
       const messages = rows.map(r => {
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null, ts: r.ts };
       });
       res.end(JSON.stringify(messages));
       return;
@@ -1070,9 +1084,9 @@ const server = http.createServer(async (req, res) => {
       const limit = parseInt(url.searchParams.get('limit') || '20');
       const rows = stmtLog.all(limit);
       const messages = rows.map(r => {
-        if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null };
+        if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null, ts: r.ts };
         const preview = (r.body || '').slice(0, 120);
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, preview, origin_aro: r.origin_aro || null };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, preview, origin_aro: r.origin_aro || null, ts: r.ts };
       });
       res.end(JSON.stringify(messages));
       return;
@@ -1091,8 +1105,8 @@ const server = http.createServer(async (req, res) => {
         rows = stmtHistoryDm.all(agent, bucket, bucket, agent, limit);
       }
       const messages = rows.map(r => {
-        if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null };
-        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null };
+        if (r.retracted_at) return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, retracted: true, origin_aro: r.origin_aro || null, ts: r.ts };
+        return { id: r.id, from: r.sender, to: r.recipient, tag: r.tag, re: r.re, body: r.body, origin_aro: r.origin_aro || null, ts: r.ts };
       });
       res.end(JSON.stringify(messages));
       return;

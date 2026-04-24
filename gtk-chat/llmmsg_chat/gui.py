@@ -10,7 +10,7 @@ Run:
     python3 -m llmmsg_chat.gui --agent elazar-whey-gui-w --cwd "$(pwd)"
 """
 
-VERSION = '0.4.4'
+VERSION = '0.4.5'
 APP_NAME = 'llmmsg-chat'
 
 import argparse
@@ -19,6 +19,8 @@ import os
 import signal
 import sys
 import threading
+import time
+from datetime import datetime
 from typing import Optional
 
 import gi
@@ -83,6 +85,7 @@ class Message(GObject.Object):
     body = GObject.Property(type=str, default='')
     origin_aro = GObject.Property(type=str, default='')
     tag = GObject.Property(type=str, default='')
+    ts_epoch = GObject.Property(type=float, default=0.0)
 
     @classmethod
     def from_event(cls, event: dict) -> 'Message':
@@ -94,12 +97,18 @@ class Message(GObject.Object):
         else:
             text = str(body)
         sender = event.get('from') or event.get('sender') or '?'
+        raw_ts = event.get('ts')
+        try:
+            ts_epoch = float(raw_ts) if raw_ts not in (None, '') else time.time()
+        except (TypeError, ValueError):
+            ts_epoch = time.time()
         return cls(
             msg_id=event.get('id') or 0,
             sender=sender,
             body=text,
             origin_aro=event.get('origin_aro') or '',
             tag=event.get('tag') or '',
+            ts_epoch=ts_epoch,
         )
 
 
@@ -516,7 +525,9 @@ class ChatWindow(Adw.ApplicationWindow):
         msg: Message = list_item.get_item()
         color = color_for_agent(msg.sender or '?')
         safe = GLib.markup_escape_text(msg.sender or '?')
+        hhmm = datetime.fromtimestamp(msg.ts_epoch or time.time()).strftime('%I:%M %p').lstrip('0')
         list_item.sender_label.set_markup(
+            f'<span foreground="#888">{hhmm}</span>  |  '
             f'<span foreground="{color}" weight="bold">{safe}</span>'
         )
         list_item.body_label.set_label(msg.body or '')
@@ -590,6 +601,7 @@ class ChatWindow(Adw.ApplicationWindow):
                     sender=self.agent, body=text,
                     origin_aro=bucket if bucket.startswith('aro:') else '',
                     tag=result.get('tag') or '',
+                    ts_epoch=time.time(),
                 )
                 GLib.idle_add(self._append_local, bucket, msg)
             except Exception as exc:

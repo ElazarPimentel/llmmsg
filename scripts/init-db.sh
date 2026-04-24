@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="2.5"
+VERSION="2.6"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -96,6 +96,11 @@ CREATE TABLE hub_log (
     ts      INTEGER NOT NULL,
     level   TEXT    NOT NULL,
     message TEXT    NOT NULL
+);
+
+CREATE TABLE guide_delivered (
+    agent         TEXT PRIMARY KEY,
+    guide_version TEXT NOT NULL
 );
 
 CREATE INDEX idx_recv       ON messages(recipient, id);
