@@ -4,7 +4,7 @@ up GTK. Prints events as they arrive, accepts /send /history /online /roster
 /aro /quit commands.
 """
 
-VERSION = '0.0.3'
+VERSION = '0.0.4'
 
 import argparse
 import os
@@ -20,15 +20,18 @@ from .hub_client import HubClient, HubError, SSEStream
 
 HELP = """
 commands:
-  /send <target> <text>     send to agent or aro:X (multi-word text ok)
-  /history <bucket> [N]     recent history (default 40)
-  /online [aro]             list online agents (optionally in a given ARO)
-  /roster                   list all registered agents
-  /aro join <name>          join ARO
-  /aro leave <name>         leave ARO
+  /send <target> <text>     send a message to an agent or aro:<name>
+  /history <bucket> [N]     show recent messages for a room or DM bucket
+  /online [aro]             list online agents; optionally scope to one ARO
+  /roster                   list all registered agents and their cwd
+  /join <name>              join aro:<name>
+  /leave <name>             leave aro:<name>
+  /aro join <name>          explicit join form (same as /join)
+  /aro leave <name>         explicit leave form
+  /aro list                 show all known AROs
   /guide                    print the current messaging guide
   /quit                     unregister cleanly and exit
-  /help | ?                 this list
+  /help | ?                 show this command list
 """
 
 
@@ -211,12 +214,38 @@ def _handle(line: str, client: HubClient, agent: str, shutdown) -> None:
             snip = (text or '')[:100].replace('\n', ' ')
             sys.stdout.write(f'  #{row.get("id")} <{row.get("from", "?")}> {snip}\n')
         return
-    if line.startswith('/aro '):
-        parts = line.split(maxsplit=2)
-        if len(parts) < 3 or parts[1] not in ('join', 'leave'):
-            sys.stdout.write('usage: /aro join|leave <name>\n')
+    if line.startswith('/join '):
+        name = line[len('/join '):].strip()
+        if not name:
+            sys.stdout.write('usage: /join <name>\n')
             return
-        op, name = parts[1], parts[2].strip()
+        result = client.aro_join(agent, name.removeprefix('aro:'))
+        sys.stdout.write(f'  join {name}: {result}\n')
+        return
+    if line == '/leave' or line.startswith('/leave '):
+        name = line[len('/leave'):].strip()
+        if not name:
+            sys.stdout.write('usage: /leave <name>\n')
+            return
+        result = client.aro_leave(agent, name.removeprefix('aro:'))
+        sys.stdout.write(f'  leave {name}: {result}\n')
+        return
+    if line == '/aro' or line.startswith('/aro '):
+        parts = line.split(maxsplit=2)
+        if len(parts) < 2 or parts[1] not in ('join', 'leave', 'list'):
+            sys.stdout.write('usage: /aro join <name> | /aro leave <name> | /aro list\n')
+            return
+        op = parts[1]
+        if op == 'list':
+            aros = client.aro_list()
+            for name in sorted(aros.keys(), key=str.lower):
+                members = aros.get(name) or []
+                sys.stdout.write(f'  {name}: {len(members)} member{"s" if len(members) != 1 else ""}\n')
+            return
+        if len(parts) < 3 or not parts[2].strip():
+            sys.stdout.write(f'usage: /aro {op} <name>\n')
+            return
+        name = parts[2].strip()
         if op == 'join':
             result = client.aro_join(agent, name)
         else:

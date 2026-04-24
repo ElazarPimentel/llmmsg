@@ -10,7 +10,7 @@ Run:
     python3 -m llmmsg_chat.gui --agent elazar-whey-gui-w --cwd "$(pwd)"
 """
 
-VERSION = '0.4.3'
+VERSION = '0.4.4'
 APP_NAME = 'llmmsg-chat'
 
 import argparse
@@ -39,6 +39,34 @@ def color_for_agent(name: str) -> str:
     return _AGENT_PALETTE[h[0] % len(_AGENT_PALETTE)]
 
 from .hub_client import HubClient, HubError, SSEStream
+
+
+HELP_TEXT = (
+    'Compose / keys\n'
+    '  Enter — send the current message\n'
+    '  Shift+Enter — insert a newline in the compose box\n'
+    '  Send button — send the current message\n\n'
+    'Slash commands\n'
+    '  /help — open this help window\n'
+    '  /join <name> — join aro:<name> and switch to it\n'
+    '  /leave [name] — leave the current ARO, or leave aro:<name>\n'
+    '  /rooms — list the rooms currently shown in the sidebar\n'
+    '  /online [aro] — show online agents, optionally scoped to one ARO\n'
+    '  /aro list — show all known AROs\n'
+    '  /aro leave [name] — leave the current ARO, or leave aro:<name>\n'
+    '  /guide — show the current messaging guide\n\n'
+    'Buttons / sidebar\n'
+    '  Sidebar + button — join an ARO from the picker or by typing a name\n'
+    '  Header trash icon — leave the currently selected ARO\n'
+    '  Click a sidebar row — switch rooms and jump to the newest message\n\n'
+    'Routing\n'
+    '  aro:<name> — group room; all ARO members receive the message\n'
+    '  <agent> — direct-message room for that agent\n\n'
+    'Notes\n'
+    '  /leave only works for ARO rooms; DMs cannot be "left"\n'
+    '  Leaving a room removes it from the sidebar; history stays in the DB\n'
+    '  Closing the window cleanly unregisters the session'
+)
 
 
 # ---------------------------------------------------------------------------
@@ -472,7 +500,7 @@ class ChatWindow(Adw.ApplicationWindow):
     def _message_setup(self, _factory, list_item):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2,
                       margin_start=12, margin_end=12, margin_top=4, margin_bottom=4)
-        sender_label = Gtk.Label(xalign=0, use_markup=True)
+        sender_label = Gtk.Label(xalign=0, use_markup=True, selectable=True)
         sender_label.add_css_class('caption')
         body_label = Gtk.Label(xalign=0, wrap=True, selectable=True, use_markup=False)
         body_label.set_wrap_mode(2)  # PANGO_WRAP_WORD_CHAR
@@ -504,49 +532,25 @@ class ChatWindow(Adw.ApplicationWindow):
         return False
 
     def _on_help_clicked(self, _btn):
-        win = Adw.Window(transient_for=self, modal=True, title=f'{APP_NAME} — Commands')
+        self._show_text_window('Commands', f'{APP_NAME} v{VERSION}', HELP_TEXT)
+
+    def _show_text_window(self, title: str, subtitle: str, text: str):
+        win = Adw.Window(transient_for=self, modal=True, title=f'{APP_NAME} — {title}')
         win.set_default_size(520, 560)
 
         toolbar = Adw.ToolbarView()
         header = Adw.HeaderBar()
-        header.set_title_widget(Adw.WindowTitle.new('Commands', f'{APP_NAME} v{VERSION}'))
+        header.set_title_widget(Adw.WindowTitle.new(title, subtitle))
         toolbar.add_top_bar(header)
 
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16,
                       margin_start=18, margin_end=18,
                       margin_top=18, margin_bottom=18)
+        heading = Gtk.Label(label=title, xalign=0)
+        heading.add_css_class('title-2')
+        box.append(heading)
 
-        title = Gtk.Label(label='Commands', xalign=0)
-        title.add_css_class('title-2')
-        box.append(title)
-
-        body = Gtk.Label(
-            label=(
-                'Compose / keys\n'
-                '  Enter — send message\n'
-                '  Shift+Enter — newline inside compose\n'
-                '  Click send icon — send (same as Enter)\n\n'
-                'Joining / leaving AROs\n'
-                '  Sidebar + button — open the join popover\n'
-                '  Pick an existing ARO from the list, or type a new name and press Enter / Join\n'
-                '  Header trash icon — leave the currently selected ARO\n'
-                '  Leaving an ARO removes the room from the sidebar; history stays in the DB\n\n'
-                'Rooms / scrolling\n'
-                '  Click a sidebar row — switch to that room and jump to the newest message\n'
-                '  New messages auto-scroll only while you are already at the bottom\n'
-                '  If you scroll up to read history, new messages do not yank the view\n'
-                '  Sidebar badge — unread count for rooms you are not viewing\n\n'
-                'Message routing\n'
-                '  aro:<name> — group room; all ARO members receive the message\n'
-                '  <agent> — direct-message room for that agent\n\n'
-                'Exit\n'
-                '  Window X — cleanly unregisters and closes\n'
-                '  Ctrl+C in the terminal — same clean shutdown'
-            ),
-            xalign=0,
-            selectable=True,
-            wrap=True,
-        )
+        body = Gtk.Label(label=text, xalign=0, selectable=True, wrap=True)
         body.set_wrap_mode(2)  # PANGO_WRAP_WORD_CHAR
         box.append(body)
 
@@ -564,6 +568,9 @@ class ChatWindow(Adw.ApplicationWindow):
         buf = self.compose_view.get_buffer()
         text = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False).strip()
         if not text:
+            return
+        if text.startswith('/'):
+            self._handle_slash_command(text)
             return
         buf.set_text('', 0)
         # bucket already has the correct prefix ('aro:X' or plain agent for DM)
@@ -589,6 +596,119 @@ class ChatWindow(Adw.ApplicationWindow):
                 GLib.idle_add(self._toast, f'send failed: {exc}')
         threading.Thread(target=work, daemon=True, name='send').start()
 
+    def _handle_slash_command(self, text: str):
+        parts = text.split(maxsplit=1)
+        command = parts[0]
+        arg = parts[1].strip() if len(parts) > 1 else ''
+
+        if command in ('/help', '/?'):
+            self.compose_view.get_buffer().set_text('', 0)
+            self._on_help_clicked(None)
+            return
+        if command == '/join':
+            if not arg:
+                self._toast('usage: /join <name>')
+                return
+            self.compose_view.get_buffer().set_text('', 0)
+            self._join_named_aro(arg)
+            return
+        if command == '/leave':
+            self.compose_view.get_buffer().set_text('', 0)
+            self._leave_named_aro(arg or None)
+            return
+        if command == '/rooms':
+            self.compose_view.get_buffer().set_text('', 0)
+            rooms = '\n'.join(sorted(self.rooms.keys(), key=str.lower)) or '(none)'
+            self._show_text_window('Rooms', self.agent, rooms)
+            return
+        if command == '/online':
+            self.compose_view.get_buffer().set_text('', 0)
+            self._show_online(arg or None)
+            return
+        if command == '/aro':
+            self.compose_view.get_buffer().set_text('', 0)
+            self._handle_aro_command(arg)
+            return
+        if command == '/guide':
+            self.compose_view.get_buffer().set_text('', 0)
+            self._show_guide()
+            return
+
+        self._toast(f'unknown command: {command}. /help for commands')
+
+    def _show_online(self, aro: Optional[str]):
+        def work():
+            try:
+                result = self.client.online(self.agent, aro.removeprefix('aro:') if aro else None)
+                names = result.get('online', []) or []
+                scope = aro or 'all rooms'
+                count = result.get('count', len(names))
+                text = '\n'.join(names) if names else '(none)'
+                GLib.idle_add(
+                    self._show_text_window,
+                    'Online',
+                    f'{scope} · {count} agent{"s" if count != 1 else ""}',
+                    text,
+                )
+            except Exception as exc:
+                GLib.idle_add(self._toast, f'online failed: {exc}')
+        threading.Thread(target=work, daemon=True, name='online').start()
+
+    def _handle_aro_command(self, arg: str):
+        parts = arg.split(maxsplit=1)
+        op = parts[0] if parts else ''
+        rest = parts[1].strip() if len(parts) > 1 else ''
+
+        if op == 'list':
+            self._show_aro_list()
+            return
+        if op == 'join':
+            if not rest:
+                self._toast('usage: /aro join <name>')
+                return
+            self._join_named_aro(rest)
+            return
+        if op == 'leave':
+            self._leave_named_aro(rest or None)
+            return
+
+        self._toast('usage: /aro list | /aro join <name> | /aro leave [name]')
+
+    def _show_aro_list(self):
+        def work():
+            try:
+                aros = self.client.aro_list()
+                names = sorted(aros.keys(), key=str.lower)
+                if names:
+                    lines = []
+                    for name in names:
+                        members = aros.get(name) or []
+                        lines.append(
+                            f'{name} ({len(members)} member{"s" if len(members) != 1 else ""})'
+                        )
+                    text = '\n'.join(lines)
+                else:
+                    text = '(none)'
+                GLib.idle_add(
+                    self._show_text_window,
+                    'AROs',
+                    f'{len(names)} known',
+                    text,
+                )
+            except Exception as exc:
+                GLib.idle_add(self._toast, f'aro list failed: {exc}')
+        threading.Thread(target=work, daemon=True, name='aro-list-cmd').start()
+
+    def _show_guide(self):
+        def work():
+            try:
+                result = self.client.guide()
+                text = result.get('guide') or result.get('value') or str(result)
+                GLib.idle_add(self._show_text_window, 'Guide', self.agent, text)
+            except Exception as exc:
+                GLib.idle_add(self._toast, f'guide failed: {exc}')
+        threading.Thread(target=work, daemon=True, name='guide').start()
+
     def _append_local(self, bucket: str, msg: Message):
         store = self.rooms.get(bucket)
         if store is None:
@@ -604,6 +724,13 @@ class ChatWindow(Adw.ApplicationWindow):
         if not name:
             return
         popover.popdown()
+        self._join_named_aro(name)
+
+    def _join_named_aro(self, raw_name: str):
+        name = (raw_name or '').strip().removeprefix('aro:').strip()
+        if not name:
+            self._toast('usage: /join <name>')
+            return
         bucket = f'aro:{name}'
         def work():
             try:
@@ -619,9 +746,15 @@ class ChatWindow(Adw.ApplicationWindow):
         return False
 
     def _on_leave_clicked(self, _btn):
+        self._leave_named_aro(None)
+
+    def _leave_named_aro(self, raw_name: Optional[str]):
         bucket = self.current_bucket
+        if raw_name:
+            name = raw_name.strip().removeprefix('aro:').strip()
+            bucket = f'aro:{name}' if name else ''
         if not bucket or not bucket.startswith('aro:'):
-            self._toast('no ARO selected')
+            self._toast('leave only works for ARO rooms')
             return
         name = bucket.removeprefix('aro:')
         def work():
