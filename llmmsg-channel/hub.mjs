@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '4.8';
+const VERSION = '4.9';
 const LENGTH_NUDGE_THRESHOLD = 1500;
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
@@ -376,7 +376,7 @@ function httpGetRemote(hubUrl, path) {
 
 async function listRemoteAroOnline(hubName, hubUrl, aroName) {
   try {
-    const result = await httpGetRemote(hubUrl, `/online?aro=${encodeURIComponent(aroName)}`);
+    const result = await httpGetRemote(hubUrl, `/online?aro=${encodeURIComponent(aroName)}&local=1`);
     const online = Array.isArray(result.online) ? result.online : [];
     return { ok: true, hub: hubName, online };
   } catch {
@@ -1022,6 +1022,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && path === '/online') {
       const agent = (url.searchParams.get('agent') || '').toLowerCase();
       const aro = url.searchParams.get('aro');
+      const localOnly = url.searchParams.get('local') === '1';
       const nowUnix = Math.floor(Date.now() / 1000);
       const threshold = nowUnix - 30; // bridge heartbeats every 2s, so 30s catches any active agent
 
@@ -1053,7 +1054,9 @@ const server = http.createServer(async (req, res) => {
         // Multi-site: fold in online agents from remote hubs for each aro.
         // This closes the cross-site /online gap — without this, each agent's
         // `online` tool sees only its local hub's members of the ARO.
-        if (remoteHubEntries.length) {
+        // `local=1` short-circuits the merge so remote-to-remote recursion
+        // can't loop.
+        if (remoteHubEntries.length && !localOnly) {
           const lookups = [];
           for (const a of aroFilter) {
             for (const [name, url] of remoteHubEntries) {
