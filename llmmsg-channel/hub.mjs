@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '4.7';
+const VERSION = '4.8';
 const LENGTH_NUDGE_THRESHOLD = 1500;
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
@@ -1049,7 +1049,24 @@ const server = http.createServer(async (req, res) => {
         for (const a of aroFilter) {
           for (const m of stmtAroMembersAll.all(a)) aroMembers.add(m.agent);
         }
-        const filtered = [...aroMembers].filter(a => onlineSet.has(a)).sort();
+        const merged = new Set([...aroMembers].filter(a => onlineSet.has(a)));
+        // Multi-site: fold in online agents from remote hubs for each aro.
+        // This closes the cross-site /online gap — without this, each agent's
+        // `online` tool sees only its local hub's members of the ARO.
+        if (remoteHubEntries.length) {
+          const lookups = [];
+          for (const a of aroFilter) {
+            for (const [name, url] of remoteHubEntries) {
+              lookups.push(listRemoteAroOnline(name, url, a));
+            }
+          }
+          const results = await Promise.all(lookups);
+          for (const r of results) {
+            if (!r.ok) continue;
+            for (const agent of r.online) merged.add(agent);
+          }
+        }
+        const filtered = [...merged].sort();
         res.end(JSON.stringify({ online: filtered, count: filtered.length, aros: aroFilter }));
       } else {
         res.end(JSON.stringify({ online: allOnline.sort(), count: allOnline.length }));
