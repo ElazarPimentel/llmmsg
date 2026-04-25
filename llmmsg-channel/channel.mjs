@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
 
-const VERSION = '2.9';
+const VERSION = '3.0';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_HOST = process.env.LLMMSG_HUB_HOST || '127.0.0.1';
 const HUB_URL = `http://${HUB_HOST}:${HUB_PORT}`;
@@ -20,6 +20,10 @@ const AGENT_CWD = process.env.LLMMSG_CWD || process.cwd();
 let currentAgent = (process.env.LLMMSG_AGENT || '').toLowerCase();
 // The alias used for the current SSE connection (may be unregistered-xxxx)
 let sseAlias = '';
+// Tracked client-side so we can re-issue aro_join after a hub-side eviction
+// (stale-roster sweeper) or any other DB-side membership loss. Without this,
+// reconnecting CC sessions silently drop out of every ARO they had joined.
+const joinedAros = new Set();
 
 // Claude Code's `notifications/claude/channel` router is not yet wired at MCP
 // `initialize` time, so any SSE frame that lands before the first model-driven
@@ -307,12 +311,16 @@ async function handleCall(name, args) {
       }
       case 'aro_join': {
         if (!currentAgent) return { content: [{ type: 'text', text: JSON.stringify({ error: 'not_registered' }) }] };
-        const result = await httpPost('/aro/join', { aro: args.aro.toLowerCase(), agent: currentAgent });
+        const aroName = args.aro.toLowerCase();
+        const result = await httpPost('/aro/join', { aro: aroName, agent: currentAgent });
+        if (result && result.ok) joinedAros.add(aroName);
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
       case 'aro_leave': {
         if (!currentAgent) return { content: [{ type: 'text', text: JSON.stringify({ error: 'not_registered' }) }] };
-        const result = await httpPost('/aro/leave', { aro: args.aro.toLowerCase(), agent: currentAgent });
+        const aroName = args.aro.toLowerCase();
+        const result = await httpPost('/aro/leave', { aro: aroName, agent: currentAgent });
+        if (result && result.ok) joinedAros.delete(aroName);
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
       case 'roster': {
@@ -421,6 +429,24 @@ function connectToHub() {
     // TCP keepalive on the client side too, same reason as the hub.
     if (res.socket && typeof res.socket.setKeepAlive === 'function') {
       res.socket.setKeepAlive(true, 15000);
+    }
+    // Re-issue aro_join for every ARO this session previously joined. Covers
+    // the case where the hub stale-roster sweeper (or any DB-side cleanup)
+    // dropped our aros rows while we were disconnected. Best-effort; failures
+    // are logged but do not block delivery. Only fires when we have a real
+    // agent name — unregistered-* SSE aliases never owned aros.
+    if (currentAgent && joinedAros.size > 0) {
+      for (const aro of joinedAros) {
+        httpPost('/aro/join', { aro, agent: currentAgent })
+          .then(r => {
+            if (r && r.ok) {
+              console.error(`[llmmsg-channel] re-joined aro:${aro} after reconnect`);
+            } else {
+              console.error(`[llmmsg-channel] re-join aro:${aro} failed: ${JSON.stringify(r)}`);
+            }
+          })
+          .catch(err => console.error(`[llmmsg-channel] re-join aro:${aro} error: ${err.message}`));
+      }
     }
     let buffer = '';
     let lastEventAt = Date.now();

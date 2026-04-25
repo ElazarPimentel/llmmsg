@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '4.9';
+const VERSION = '5.1';
 const LENGTH_NUDGE_THRESHOLD = 1500;
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
@@ -423,6 +423,44 @@ if (remoteHubEntries.length > 0) {
 // Connected channel sessions: agent name → SSE response
 const channels = new Map();
 
+// Stale-roster sweeper. Roster rows live forever today: a CC session whose
+// channel.mjs SSE child crashed silently leaves an entry that aro_list and
+// other reads still return, so fanout targets ghosts. Sweep every 60s — for
+// any agent without a live SSE *and* with last_seen_at older than
+// ROSTER_STALE_MS, delete the roster row and any aros memberships. Live SSE
+// agents stay fresh via the 25s ping (heartbeat now refreshes last_seen_at);
+// Codex agents stay fresh via the bridge /heartbeat call. The 'system' agent
+// is excluded because it is seeded once and never reconnects. channel.mjs
+// re-issues aro_join on reconnect (v3.0+) so post-eviction returns are
+// idempotent.
+const ROSTER_STALE_MS = 600 * 1000;          // 10 minutes
+const ROSTER_SWEEP_INTERVAL_MS = 60 * 1000;  // 1 minute
+const stmtSweepCandidates = db.prepare(
+  `SELECT agent FROM roster
+   WHERE agent != 'system'
+     AND last_seen_at < strftime('%s','now') - ?`
+);
+setInterval(() => {
+  try {
+    const thresholdSec = Math.floor(ROSTER_STALE_MS / 1000);
+    const candidates = stmtSweepCandidates.all(thresholdSec);
+    const removed = [];
+    for (const { agent } of candidates) {
+      if (channels.has(agent)) continue;
+      const aroChanges = stmtDeleteAroByAgent.run(agent).changes;
+      const rosterChanges = stmtUnregister.run(agent).changes;
+      if (rosterChanges > 0 || aroChanges > 0) {
+        removed.push(agent);
+      }
+    }
+    if (removed.length) {
+      console.log(`[sweep] roster evict: ${removed.join(', ')}`);
+    }
+  } catch (err) {
+    console.error(`[sweep] error: ${err.message}`);
+  }
+}, ROSTER_SWEEP_INTERVAL_MS);
+
 // Poll DB for messages written directly via llmmsg.sh CLI (bypassing hub /send)
 function pollForDirectWrites() {
   for (const [agent] of channels) {
@@ -669,6 +707,11 @@ const server = http.createServer(async (req, res) => {
       const heartbeat = setInterval(() => {
         try {
           res.write(`: ping ${Date.now()}\n\n`);
+          // Refresh last_seen_at on every successful ping so live SSE agents
+          // do not drift past the stale-roster sweep threshold even when they
+          // never call /heartbeat or /register again. Without this, the
+          // sweeper would reap genuinely-connected agents.
+          stmtUpdateLastSeen.run(agent);
         } catch {
           // Write error — close handler will evict. Stop pinging.
           clearInterval(heartbeat);
@@ -749,15 +792,23 @@ const server = http.createServer(async (req, res) => {
       // PK, guide_version). On version bump, every agent gets it once on
       // its next register; repeat registers of the same version are silent.
       // Cuts the dominant `system` token spend flagged by KPI v1.8.
+      //
+      // Order matters: write guide_delivered FIRST, then push. Prior code
+      // pushed first inside an empty try/catch, so a failed
+      // stmtSetGuideDelivered.run silently lost the gating record and the
+      // next register re-pushed the same v2.9 guide. Confirmed cause of the
+      // 24-pushes-per-day spike on mars-pm/db/coder-cc-w.
       const guideRow = stmtGetConfig.get('message_guide');
       if (guideRow && guideRow.value) {
         const delivered = stmtGetGuideDelivered.get(agent);
         if (!delivered || delivered.guide_version !== guideRow.version) {
-          const guideText = `Messaging guide v${guideRow.version}:\n${guideRow.value}`;
           try {
-            sendMessage('system', agent, null, guideText);
             stmtSetGuideDelivered.run(agent, guideRow.version);
-          } catch {}
+            const guideText = `Messaging guide v${guideRow.version}:\n${guideRow.value}`;
+            sendMessage('system', agent, null, guideText);
+          } catch (err) {
+            console.error(`[register] guide-push failed for ${agent}: ${err.message}`);
+          }
         }
       }
 
