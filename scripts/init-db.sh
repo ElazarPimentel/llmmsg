@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="2.6"
+VERSION="2.7"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -103,11 +103,29 @@ CREATE TABLE guide_delivered (
     guide_version TEXT NOT NULL
 );
 
-CREATE INDEX idx_recv       ON messages(recipient, id);
-CREATE INDEX idx_origin_tag ON messages(origin_tag) WHERE origin_tag IS NOT NULL;
-CREATE INDEX idx_origin_aro ON messages(origin_aro) WHERE origin_aro IS NOT NULL;
-CREATE INDEX idx_roster_seen ON roster(last_seen_at);
-CREATE INDEX idx_hub_log_ts ON hub_log(ts);
+-- ARO opinion-request lifecycle (Phase 2a: deadline-driven auto-close).
+-- Hub captures expected_repliers + deadline at /send time when sender flags
+-- expects_replies. A 30s timer closes expired open requests as
+-- 'closed:incomplete' and emits a system message to the originating ARO.
+CREATE TABLE opinion_requests (
+    tag               TEXT PRIMARY KEY,
+    aro               TEXT NOT NULL,
+    sender            TEXT NOT NULL,
+    expected_repliers TEXT,
+    deadline_at       INTEGER NOT NULL,
+    close_policy      TEXT NOT NULL DEFAULT 'deadline',
+    status            TEXT NOT NULL DEFAULT 'open',
+    created_at        INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    closed_at         INTEGER,
+    closed_reason     TEXT
+);
+
+CREATE INDEX idx_recv                ON messages(recipient, id);
+CREATE INDEX idx_origin_tag          ON messages(origin_tag) WHERE origin_tag IS NOT NULL;
+CREATE INDEX idx_origin_aro          ON messages(origin_aro) WHERE origin_aro IS NOT NULL;
+CREATE INDEX idx_roster_seen         ON roster(last_seen_at);
+CREATE INDEX idx_hub_log_ts          ON hub_log(ts);
+CREATE INDEX idx_opinion_requests_open ON opinion_requests(status, deadline_at) WHERE status='open';
 
 -- Seed message guide
 INSERT INTO config (key, value, version) VALUES ('message_guide',

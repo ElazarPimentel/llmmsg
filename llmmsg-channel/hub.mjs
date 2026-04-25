@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '5.1';
+const VERSION = '5.2';
 const LENGTH_NUDGE_THRESHOLD = 1500;
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
@@ -93,6 +93,25 @@ for (const migration of [
      agent         TEXT PRIMARY KEY,
      guide_version TEXT NOT NULL
    )`,
+  // ARO opinion-request lifecycle. When a sender sets expects_replies on an
+  // ARO send, the hub captures a snapshot of expected agents (online wheel
+  // OR caller-supplied list) and a deadline. A 30s timer closes expired
+  // requests as 'closed:incomplete' and emits a system message to the ARO.
+  // Without this, opinion requests stalled forever when a slot stayed silent.
+  `CREATE TABLE IF NOT EXISTS opinion_requests (
+     tag               TEXT PRIMARY KEY,
+     aro               TEXT NOT NULL,
+     sender            TEXT NOT NULL,
+     expected_repliers TEXT,
+     deadline_at       INTEGER NOT NULL,
+     close_policy      TEXT NOT NULL DEFAULT 'deadline',
+     status            TEXT NOT NULL DEFAULT 'open',
+     created_at        INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+     closed_at         INTEGER,
+     closed_reason     TEXT
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_opinion_requests_open
+     ON opinion_requests(status, deadline_at) WHERE status='open'`,
   // Views: DROP + CREATE on every start so definition changes propagate
   // without a separate migration step. Keep their SQL as the single source
   // of truth for fan-out collapse and online membership.
@@ -319,6 +338,16 @@ const stmtSetGuideDelivered = db.prepare(
   `INSERT INTO guide_delivered (agent, guide_version) VALUES (?, ?)
    ON CONFLICT(agent) DO UPDATE SET guide_version = excluded.guide_version`
 );
+const stmtInsertOpinionRequest = db.prepare(
+  `INSERT INTO opinion_requests (tag, aro, sender, expected_repliers, deadline_at, close_policy)
+   VALUES (?, ?, ?, ?, ?, ?)`
+);
+const stmtCloseExpired = db.prepare(
+  `UPDATE opinion_requests
+   SET status = 'closed:incomplete', closed_at = strftime('%s','now'), closed_reason = 'deadline'
+   WHERE status = 'open' AND deadline_at < strftime('%s','now')
+   RETURNING tag, aro, sender, expected_repliers`
+);
 
 // --- Multi-site: remote hub forwarding ---
 const remoteHubs = REMOTE_HUBS_JSON ? safeParse(REMOTE_HUBS_JSON) : {};
@@ -460,6 +489,42 @@ setInterval(() => {
     console.error(`[sweep] error: ${err.message}`);
   }
 }, ROSTER_SWEEP_INTERVAL_MS);
+
+// Opinion-request deadline closer. Every 30s, find open opinion_requests
+// whose deadline has elapsed, close them as 'closed:incomplete', and emit a
+// system message to the originating ARO so all members see the close.
+const OPINION_DEADLINE_CHECK_MS = 30 * 1000;
+setInterval(() => {
+  try {
+    const expired = stmtCloseExpired.all();
+    for (const row of expired) {
+      let expectedList = [];
+      try { expectedList = JSON.parse(row.expected_repliers || '[]'); } catch {}
+      const expectedStr = expectedList.length ? expectedList.join(',') : '<none>';
+      const notice =
+        `[opinion-request closed:incomplete] tag=${row.tag} aro:${row.aro} sender=${row.sender} ` +
+        `expected=[${expectedStr}] reason=deadline. The request stalled past its deadline; ` +
+        `requester should proceed with the opinions received or reissue with a new deadline.`;
+      try {
+        sendMessage('system', `aro:${row.aro}`, null, notice, `aro:${row.aro}`);
+      } catch (sendErr) {
+        // sendMessage signature expects a recipient agent, not aro:X. Fall
+        // back: fan out manually to current ARO members.
+        try {
+          const members = activeAroMembers(row.aro, 'system');
+          for (const m of members) {
+            sendMessage('system', m, null, notice, `aro:${row.aro}`);
+          }
+        } catch (fanErr) {
+          console.error(`[opinion-deadline] notice fanout failed for ${row.tag}: ${fanErr.message}`);
+        }
+      }
+      console.log(`[opinion-deadline] closed ${row.tag} (aro:${row.aro}, sender=${row.sender})`);
+    }
+  } catch (err) {
+    console.error(`[opinion-deadline] error: ${err.message}`);
+  }
+}, OPINION_DEADLINE_CHECK_MS);
 
 // Poll DB for messages written directly via llmmsg.sh CLI (bypassing hub /send)
 function pollForDirectWrites() {
@@ -883,7 +948,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && path === '/send') {
       const body = await parseBody(req);
-      const { from, to, re, message } = body;
+      const { from, to, re, message, expects_replies, reply_deadline_ms, close_policy } = body;
       if (!from || !to || !message) {
         res.writeHead(400);
         res.end(JSON.stringify({ error: 'missing from, to, or message' }));
@@ -978,6 +1043,37 @@ const server = http.createServer(async (req, res) => {
         const originAro = `aro:${aroName}`;
         const members = activeAroMembers(aroName, from);
         const results = members.map(member => sendMessage(from, member, re || null, msgBody, originAro));
+
+        // Opinion-request lifecycle: when sender flags expects_replies, snapshot
+        // the wheel and a deadline. The deadline timer auto-closes the request
+        // as 'closed:incomplete' so opinion threads cannot stall forever.
+        // Reply tracking + 'all_expected' close policy land in Phase 2b.
+        if (expects_replies !== undefined && expects_replies !== false && results.length > 0) {
+          try {
+            let expected;
+            if (Array.isArray(expects_replies)) {
+              expected = expects_replies.filter(a => typeof a === 'string' && a !== from);
+            } else {
+              // expects_replies === true or any truthy value: snapshot online members
+              expected = members.slice();
+            }
+            const deadlineMs = Number.isFinite(reply_deadline_ms)
+              ? reply_deadline_ms
+              : 15 * 60 * 1000;
+            const deadlineAt = Math.floor(Date.now() / 1000) + Math.floor(deadlineMs / 1000);
+            const policy = (close_policy === 'all_expected' || close_policy === 'manual') ? close_policy : 'deadline';
+            stmtInsertOpinionRequest.run(
+              results[0].tag,
+              aroName,
+              from,
+              JSON.stringify(expected),
+              deadlineAt,
+              policy
+            );
+          } catch (err) {
+            console.error(`[opinion-request] insert failed for ${from} on aro:${aroName}: ${err.message}`);
+          }
+        }
 
         const remoteLookups = remoteHubEntries.length > 0
           ? await Promise.all(remoteHubEntries.map(([name, url]) => listRemoteAroOnline(name, url, aroName)))

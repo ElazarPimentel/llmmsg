@@ -10,7 +10,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import http from 'node:http';
 
-const VERSION = '3.0';
+const VERSION = '3.1';
 const HUB_PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const HUB_HOST = process.env.LLMMSG_HUB_HOST || '127.0.0.1';
 const HUB_URL = `http://${HUB_HOST}:${HUB_PORT}`;
@@ -157,6 +157,9 @@ const TOOLS = [
         to: { type: 'string', description: 'Recipient agent name, aro:{group}, or "*" for broadcast. Prefer aro:{group}; use "*" only with Elazar approval.' },
         message: { type: 'string', description: 'Message body as plain text. Lead with the payload. Pass a JSON object only when machine-readable data is genuinely needed (it will be serialized to a string).' },
         re: { type: 'string', description: 'Tag of message being replied to. Use this for all replies.' },
+        expects_replies: { description: 'ARO opinion-request flag. Omit/false = normal message, no lifecycle. true = hub snapshots online ARO members as expected repliers. Array of agent names = explicit expected list. Hub auto-closes the request as closed:incomplete if reply_deadline_ms elapses (default 15min). Only honored when "to" is aro:{group}.' },
+        reply_deadline_ms: { type: 'integer', description: 'Milliseconds before opinion-request auto-closes as incomplete. Defaults to 900000 (15min) when expects_replies is set.' },
+        close_policy: { type: 'string', enum: ['deadline', 'all_expected', 'manual'], description: 'Default deadline (auto-close at deadline). all_expected reserved for Phase 2b. manual disables auto-close — use only if the requester commits to closing explicitly.' },
       },
       required: ['to', 'message'],
     },
@@ -292,12 +295,16 @@ async function handleCall(name, args) {
             message: 'You are not registered. Ask the user: "What is my agent name for this session?" Then call the register tool with that name.',
           }) }] };
         }
-        const result = await httpPost('/send', {
+        const payload = {
           from: currentAgent,
           to: args.to,
           re: args.re || null,
           message: args.message,
-        });
+        };
+        if (args.expects_replies !== undefined) payload.expects_replies = args.expects_replies;
+        if (args.reply_deadline_ms !== undefined) payload.reply_deadline_ms = args.reply_deadline_ms;
+        if (args.close_policy !== undefined) payload.close_policy = args.close_policy;
+        const result = await httpPost('/send', payload);
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       }
       case 'unregister': {
