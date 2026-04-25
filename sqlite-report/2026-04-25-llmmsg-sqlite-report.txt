@@ -1,0 +1,231 @@
+daily-comms-audit.sh v1.8
+Report file: /opt/llmmsg/sqlite-report/2026-04-25-llmmsg-sqlite-report.txt
+
+=== Last 24h Communications Audit ===
+Median avg chars/message: 284.0
+Average avg chars/message: 471.0
+
+--- Per-Agent Efficiency ---
+sender                         msgs  avg_chars  max_chars  total_chars  est_tokens  replies  initiated  avg_reply_chars  avg_init_chars  over_2k  has_summary_and_details  has_summary_and_message
+-----------------------------  ----  ---------  ---------  -----------  ----------  -------  ---------  ---------------  --------------  -------  -----------------------  -----------------------
+system                         30    3426.0     4204       102765       25691.0     0        30                          3426.0          24       0                        0                      
+mars-pm-cc-w                   78    728.0      1534       56788        14197.0     68       10         702.0            906.0           0        0                        0                      
+mars-audit-ca-w                80    486.0      856        38905        9726.0      80       0          486.0                            0        0                        0                      
+cck-cc-w                       36    915.0      3449       32950        8238.0      36       0          915.0                            4        0                        0                      
+kcc-ca                         81    284.0      1161       23001        5750.0      81       0          284.0                            0        0                        0                      
+pluto-pm-cc-w                  32    633.0      1395       20248        5062.0      32       0          633.0                            0        0                        0                      
+mars-coder-cc-w                55    349.0      926        19190        4798.0      55       0          349.0                            0        0                        0                      
+mars-db-cc-w                   35    445.0      1301       15590        3898.0      35       0          445.0                            0        0                        0                      
+elazar-whey-gui-w              87    166.0      2185       14464        3616.0      0        87                          166.0           2        0                        0                      
+pluto-audit-ca-w               54    169.0      298        9114         2279.0      54       0          169.0                            0        0                        0                      
+mars-coderhelp-w               20    441.0      957        8815         2204.0      20       0          441.0                            0        0                        0                      
+lodevictor-com                 23    367.0      888        8444         2111.0      23       0          367.0                            0        0                        0                      
+kcc-ca-w                       24    336.0      835        8060         2015.0      24       0          336.0                            0        0                        0                      
+llmmsg-cc                      22    260.0      932        5720         1430.0      20       2          229.0            570.0           0        0                        0                      
+pluto-coder-ca-w               25    206.0      289        5154         1289.0      25       0          206.0                            0        0                        0                      
+fom-w                          31    149.0      246        4604         1151.0      31       0          149.0                            0        0                        0                      
+fundacionoidmortales-org-ar-l  27    140.0      318        3775         944.0       27       0          140.0                            0        0                        0                      
+llmmsg-ca                      20    159.0      533        3188         797.0       20       0          159.0                            0        0                        0                      
+fom-ca-w                       16    147.0      240        2352         588.0       8        8          164.0            130.0           0        0                        0                      
+pluto-audit-w                  7     91.0       91         637          159.0       7        0          91.0                             0        0                        0                      
+pluto-db-cc-w                  6     3.0        3          18           5.0         6        0          3.0                              0        0                        0                      
+
+--- Top Conversation Pairs ---
+pair                               msgs  chars  est_tokens
+---------------------------------  ----  -----  ----------
+mars-pm-cc-w -> elazar-whey-gui-w  18    13766  3442.0    
+cck-cc-w -> elazar-whey-gui-w      11    9806   2452.0    
+cck-cc-w -> kcc-ca                 11    9806   2452.0    
+cck-cc-w -> kcc-ca-w               11    9806   2452.0    
+mars-pm-cc-w -> mars-audit-ca-w    14    9752   2438.0    
+mars-pm-cc-w -> mars-coder-cc-w    14    9752   2438.0    
+mars-pm-cc-w -> mars-coderhelp-w   14    9752   2438.0    
+mars-pm-cc-w -> mars-db-cc-w       14    9752   2438.0    
+
+--- Flagged: Messages over 2000 chars ---
+id     sender             recipient                                     tag                     chars  preview                                                                         
+-----  -----------------  --------------------------------------------  ----------------------  -----  --------------------------------------------------------------------------------
+9318   system             lodevictor-com                                system-9318             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9319   system             fom-w                                         system-9319             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9332   system             fom-ca-w                                      system-9332             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9437   system             kidsclubcafe-com-ar                           system-9437             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9438   system             cck-w                                         system-9438             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9439   system             odaia                                         system-9439             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9440   system             sh-cc-w                                       system-9440             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9441   system             pm-mba-cc-w                                   system-9441             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9448   system             downloads                                     system-9448             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9449   system             llmmsg-ca                                     system-9449             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9450   system             llmmsg-cc                                     system-9450             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9451   system             pluto-audit-ca-w                              system-9451             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9452   system             pluto-audit-w                                 system-9452             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9476   system             pluto-coder-cc-w                              system-9476             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9504   system             mars-audit-ca-w                               system-9504             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9613   system             whatsapp chat with sandra endodoncia 2026-03  system-9613             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9719   system             pensanta-com-l                                system-9719             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9720   system             codex                                         system-9720             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9721   system             kcc-ca                                        system-9721             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9755   system             pluto-coder-ca-w                              system-9755             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9896   system             kcc-ca-w                                      system-9896             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9897   system             cck-cc-w                                      system-9897             4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+10083  system             fom-cc-w                                      system-10083            4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+10090  system             fundacionoidmortales-org-ar                   system-10090            4204   Messaging guide v2.9:                                                           
+                                                                                                       llmmsg-channel Message Creation Guide                                           
+                                                                                                                                                                                       
+                                                                                                       Audience: LLM agent                                                             
+
+9962   cck-cc-w           elazar-whey-gui-w                             cck-cc-w-9962           3449   ARO rules from ~/.claude/CLAUDE.md (lines 81-121) + llmmsg-channel guide v2.9 (d
+
+9963   cck-cc-w           kcc-ca                                        cck-cc-w-9963           3449   ARO rules from ~/.claude/CLAUDE.md (lines 81-121) + llmmsg-channel guide v2.9 (d
+
+9964   cck-cc-w           kcc-ca-w                                      cck-cc-w-9964           3449   ARO rules from ~/.claude/CLAUDE.md (lines 81-121) + llmmsg-channel guide v2.9 (d
+
+9965   cck-cc-w           llmmsg-cc                                     cck-cc-w-9965           3449   ARO rules from ~/.claude/CLAUDE.md (lines 81-121) + llmmsg-channel guide v2.9 (d
+
+9458   elazar-whey-gui-w  llmmsg-ca                                     elazar-whey-gui-w-9458  2185   llmmsg-ca said this, talk about it and tell me final agreement: Short Report    
+                                                                                                         I                                                                             
+
+9459   elazar-whey-gui-w  llmmsg-cc                                     elazar-whey-gui-w-9459  2185   llmmsg-ca said this, talk about it and tell me final agreement: Short Report    
+                                                                                                         I                                                                             
+
+--- Flagged: Duplicate summary+details pattern ---
+
+--- Flagged: Agents 2x above median avg chars ---
+sender         msgs  avg_chars  vs_median
+-------------  ----  ---------  ---------
+system         30    3426.0     12.1     
+cck-cc-w       36    915.0      3.2      
+mars-pm-cc-w   78    728.0      2.6      
+pluto-pm-cc-w  32    633.0      2.2      
+
+--- Flagged: One-off type values (used only once in 24h) ---
+
+--- Summary ---
+{"period":"24h","total_messages":789,"total_chars":383782,"est_tokens":95946.0,"median_avg_chars":284.0,"agents_above_2x_median":4}
+
+--- Comparison vs Last Audit (2026-04-23 23:00:40, guide v2.9) ---
+agent                          msgs_now  msgs_prev  msgs_delta  avg_now  avg_prev  avg_delta  tok_now  tok_prev  tok_delta  big_now  big_prev
+-----------------------------  --------  ---------  ----------  -------  --------  ---------  -------  --------  ---------  -------  --------
+mars-audit-ca-w                80        0          80          486.0    0         486.0      9726.0   0         9726.0     0        0       
+cck-cc-w                       36        0          36          915.0    0         915.0      8238.0   0         8238.0     4        0       
+kcc-ca                         81        0          81          284.0    0         284.0      5750.0   0         5750.0     0        0       
+lodevictor-com                 23        0          23          367.0    0         367.0      2111.0   0         2111.0     0        0       
+kcc-ca-w                       24        0          24          336.0    0         336.0      2015.0   0         2015.0     0        0       
+pluto-coder-ca-w               25        0          25          206.0    0         206.0      1289.0   0         1289.0     0        0       
+fom-w                          31        0          31          149.0    0         149.0      1151.0   0         1151.0     0        0       
+fundacionoidmortales-org-ar-l  27        0          27          140.0    0         140.0      944.0    0         944.0      0        0       
+fom-ca-w                       16        0          16          147.0    0         147.0      588.0    0         588.0      0        0       
+pluto-audit-w                  7         0          7           91.0     0         91.0       159.0    0         159.0      0        0       
+pluto-audit-ca-w               54        61         -7          169.0    412.0     -243.0     2279.0   6279.0    -4000.0    0        0       
+pluto-db-cc-w                  6         32         -26         3.0      545.0     -542.0     5.0      4356.0    -4351.0    0        1       
+llmmsg-ca                      20        77         -57         159.0    342.0     -183.0     797.0    6577.0    -5780.0    0        0       
+llmmsg-cc                      22        70         -48         260.0    416.0     -156.0     1430.0   7273.0    -5843.0    0        0       
+system                         30        49         -19         3426.0   2943.0    483.0      25691.0  36047.0   -10356.0   24       33      
+mars-coder-cc-w                55        149        -94         349.0    421.0     -72.0      4798.0   15665.0   -10867.0   0        0       
+elazar-whey-gui-w              87        232        -145        166.0    265.0     -99.0      3616.0   15365.0   -11749.0   2        0       
+mars-coderhelp-w               20        97         -77         441.0    638.0     -197.0     2204.0   15473.0   -13269.0   0        0       
+mars-db-cc-w                   35        120        -85         445.0    607.0     -162.0     3898.0   18217.0   -14319.0   0        0       
+pluto-pm-cc-w                  32        143        -111        633.0    707.0     -74.0      5062.0   25265.0   -20203.0   0        2       
+mars-pm-cc-w                   78        242        -164        728.0    771.0     -43.0      14197.0  46665.0   -32468.0   0        7       
+
+
+Audit snapshot saved (guide v2.9)
+
+--- NEXT STEPS FOR LLM AGENT ---
+If you ran this script on behalf of aro:llmmsg-coders, proceed as follows:
+  1. Post the report path above to aro:llmmsg-coders via the `send` tool.
+  2. llmmsg-ca and llmmsg-cc each analyze the report independently.
+  3. llmmsg-ca posts its analysis first, llmmsg-cc second.
+  4. Reconcile the two analyses into one agreed report.
+  5. llmmsg-cc posts the final agreed report to Elazar.

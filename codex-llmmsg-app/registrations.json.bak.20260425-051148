@@ -1,0 +1,138 @@
+{
+  "audit-pluto-ca-l": {
+    "threadId": "019d7f79-e928-7870-aefb-ec8aeb1c7428",
+    "registeredAt": "2026-04-12T02:16:31.087Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/evolutiva-pensanta-com/pluto/agents/audit-pluto-ca-l"
+  },
+  "llmmsg-ca-l": {
+    "threadId": "019d7b2f-5ede-7c71-b2fd-bfff53df6cde",
+    "registeredAt": "2026-04-11T06:16:35.895Z",
+    "cwd": "/home/rob",
+    "suspended": true,
+    "suspendedAt": "2026-04-11T06:23:12.341Z",
+    "suspendReason": "thread not found: 019d7b2f-5ede-7c71-b2fd-bfff53df6cde"
+  },
+  "auditor-ayudarg-ca": {
+    "threadId": "019d6b0c-06e6-7bb0-84c4-b64a9cf410ce",
+    "registeredAt": "2026-04-11T06:23:34.157Z",
+    "cwd": "/home/rob"
+  },
+  "mars-pm-ca": {
+    "threadId": "019d6fab-d3f9-78b0-9c30-556c2f2a111d",
+    "registeredAt": "2026-04-11T08:29:29.921Z",
+    "cwd": "/home/rob",
+    "suspended": true,
+    "suspendedAt": "2026-04-12T04:53:51.401Z",
+    "suspendReason": "thread not found: 019d6fab-d3f9-78b0-9c30-556c2f2a111d"
+  },
+  "pluto-pm-ca": {
+    "threadId": "019d7c20-a40d-7eb2-8878-7b62810d73c9",
+    "registeredAt": "2026-04-11T10:40:44.100Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/evolutiva-pensanta-com/pluto/agents/pluto-pm-ca",
+    "suspended": true,
+    "suspendedAt": "2026-04-16T15:52:43.123Z",
+    "suspendReason": "thread not found: 019d7c20-a40d-7eb2-8878-7b62810d73c9"
+  },
+  "audit-mars-ca-l": {
+    "threadId": "019d7f66-414f-7131-87cf-8b1ea3a13467",
+    "registeredAt": "2026-04-12T01:55:04.198Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/evolutiva-pensanta-com/mars/agents/audit-mars-ca-l",
+    "suspended": true,
+    "suspendedAt": "2026-04-12T04:53:55.436Z",
+    "suspendReason": "thread not found: 019d7f66-414f-7131-87cf-8b1ea3a13467"
+  },
+  "pluto-audit-ca": {
+    "threadId": "019d62d3-73c4-7392-8743-98ce848fd428",
+    "registeredAt": "2026-04-16T02:56:27.341Z",
+    "cwd": "/home/rob",
+    "suspended": true,
+    "suspendedAt": "2026-04-16T15:57:37.626Z",
+    "suspendReason": "thread not found: 019d62d3-73c4-7392-8743-98ce848fd428"
+  },
+  "audit-pluto-ca-w": {
+    "threadId": "019d9bd1-d709-7932-b9df-ca30d9c8de2d",
+    "registeredAt": "2026-04-17T14:21:55.946Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/evolutiva-pensanta-com/pluto/agents/audit-pluto-w",
+    "suspended": true,
+    "suspendedAt": "2026-04-17T16:12:54.626Z",
+    "suspendReason": "thread not found: 019d9bd1-d709-7932-b9df-ca30d9c8de2d"
+  },
+  "llmmsg": {
+    "threadId": "019da8a4-4b42-7a30-a245-3450a8c62eda",
+    "registeredAt": "2026-04-20T02:07:15.103Z",
+    "cwd": "/opt/llmmsg"
+  },
+  "oid2-ca": {
+    "threadId": "019daa11-38de-7862-be4f-4360df2ec618",
+    "registeredAt": "2026-04-20T13:12:51.474Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/oid2",
+    "suspended": true,
+    "suspendedAt": "2026-04-20T15:09:43.659Z",
+    "suspendReason": "thread not found: 019daa11-38de-7862-be4f-4360df2ec618; recovery failed: no rollout found for thread id 019daa11-38de-7862-be4f-4360df2ec618"
+  },
+  "sh-ca-w": {
+    "threadId": "019dad13-d981-7c70-80a2-759ae558732c",
+    "registeredAt": "2026-04-20T22:47:34.591Z",
+    "cwd": "/home/rob/Documents/terminal/sh"
+  },
+  "gtk-chat": {
+    "threadId": "019db31c-f7c6-7c51-988f-4b144a676349",
+    "registeredAt": "2026-04-22T02:55:17.499Z",
+    "cwd": "/opt/llmmsg/gtk-chat"
+  },
+  "pluto-coder-ca-w": {
+    "threadId": "019db5b1-1289-7b20-b186-32faa2929511",
+    "registeredAt": "2026-04-22T14:56:16.355Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/evolutiva-pensanta-com/pluto/agents/pluto-coder-w"
+  },
+  "fom-ca-w": {
+    "threadId": "019dbe03-8cfd-7d22-9080-9eb53be17b8b",
+    "registeredAt": "2026-04-24T05:43:18.796Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/fundacionoidmortales-org-ar"
+  },
+  "llmmsg-ca": {
+    "threadId": "019dc26a-79f0-7143-9e02-08c3a442f92e",
+    "registeredAt": "2026-04-25T02:17:35.338Z",
+    "cwd": "/opt/llmmsg"
+  },
+  "pluto-audit-ca-w": {
+    "threadId": "019dc26d-c3f5-73e0-bbc3-cf9329469767",
+    "registeredAt": "2026-04-25T02:17:48.789Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/evolutiva-pensanta-com/pluto/agents/pluto-audit-w"
+  },
+  "pluto-audit-w": {
+    "threadId": "019dc26e-3d95-7f40-9747-2a37a3d686c8",
+    "registeredAt": "2026-04-25T02:18:20.387Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/evolutiva-pensanta-com/pluto/agents/pluto-audit-w"
+  },
+  "odaia": {
+    "threadId": "019dc288-9e73-7801-b599-91de6c67339f",
+    "registeredAt": "2026-04-25T02:47:09.114Z",
+    "cwd": "/home/rob/Documents/personal/odaia"
+  },
+  "kcc-ca": {
+    "threadId": "019dc2dd-31da-79c1-8d48-ff8457e55a39",
+    "registeredAt": "2026-04-25T04:19:32.438Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/kidsclubcafe-com-ar"
+  },
+  "kcc-ca-w": {
+    "threadId": "019dc2f6-22ee-7180-b823-a6da295afb32",
+    "registeredAt": "2026-04-25T04:46:50.940Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/kidsclubcafe-com-ar"
+  },
+  "fundacionoidmortales-org-ar": {
+    "threadId": "019dc316-a412-7d91-a7c3-80b15610baef",
+    "registeredAt": "2026-04-25T05:22:17.678Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/fundacionoidmortales-org-ar"
+  },
+  "mars-coder-ca-w": {
+    "threadId": "019dc39b-5690-70e3-93e3-ab1310a79cc3",
+    "registeredAt": "2026-04-25T07:47:13.123Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/evolutiva-pensanta-com/mars/agents/mars-coder-w"
+  },
+  "mars-audit-ca-w": {
+    "threadId": "019dc3af-0447-7ef3-b8d5-72a604755478",
+    "registeredAt": "2026-04-25T08:08:43.088Z",
+    "cwd": "/home/rob/Documents/work/pensanta/websites/evolutiva-pensanta-com/mars/agents/mars-audit-w"
+  }
+}

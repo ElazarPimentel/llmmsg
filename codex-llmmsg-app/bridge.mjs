@@ -4,12 +4,19 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { CodexRpcClient } from './rpc-client.mjs';
 
-const VERSION = '1.2';
+const VERSION = '1.3';
 
 const APP_DIR = path.dirname(new URL(import.meta.url).pathname);
 const REGISTRY_PATH = path.join(APP_DIR, 'registrations.json');
 const MESSAGE_DB = process.env.LLMMSG_DB || '/opt/llmmsg/db/llmmsg.sqlite';
 const APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || 'ws://127.0.0.1:8788';
+
+// Headless Codex threads (no CLI) accumulate in registrations.json and silently
+// bill tokens whenever messages arrive. Sweep entries that show no activity
+// (no deliveries, no re-register) for INACTIVITY_TTL_MS — applies to both
+// active and suspended entries. Override with LLMMSG_BRIDGE_TTL_MS for tests.
+const INACTIVITY_TTL_MS = parseInt(process.env.LLMMSG_BRIDGE_TTL_MS || `${24 * 60 * 60 * 1000}`, 10);
+const SWEEP_INTERVAL_MS = 60 * 60 * 1000; // 1h
 
 fs.mkdirSync(APP_DIR, { recursive: true });
 
@@ -225,10 +232,43 @@ async function deliverUnread(agent) {
 
     setCursor.run(agent, maxId);
     await hubReadAck(agent, maxId);
+    // Mark this registration as recently active so the inactivity sweep does
+    // not reap it. Re-read the file to avoid clobbering parallel updates.
+    const reg = loadRegistry();
+    if (reg[agent]) {
+      reg[agent].lastActivityAt = new Date().toISOString();
+      saveRegistry(reg);
+    }
   } finally {
     await client.close();
   }
   return { delivered: rows.length, cursorId: maxId };
+}
+
+// Reap registrations that have shown no activity for INACTIVITY_TTL_MS.
+// "Activity" = lastActivityAt (set on delivery) OR registeredAt (the act of
+// (re-)registering counts). Applies to suspended entries too — if a session
+// died and never came back, the suspended row only takes up space.
+function sweepInactive() {
+  const registry = loadRegistry();
+  const now = Date.now();
+  const removed = [];
+  for (const [agent, mapping] of Object.entries(registry)) {
+    const tsStr = mapping.lastActivityAt || mapping.registeredAt;
+    if (!tsStr) continue;
+    const last = Date.parse(tsStr);
+    if (Number.isNaN(last)) continue;
+    if (now - last > INACTIVITY_TTL_MS) {
+      removed.push({ agent, age_h: ((now - last) / 3600000).toFixed(1), suspended: !!mapping.suspended });
+      delete registry[agent];
+    }
+  }
+  if (removed.length) {
+    saveRegistry(registry);
+    for (const r of removed) {
+      process.stdout.write(`[sweep] removed ${r.agent} (age ${r.age_h}h, ${r.suspended ? 'suspended' : 'active'})\n`);
+    }
+  }
 }
 
 // Heartbeat: tell the hub this agent is alive so /online includes bridge-polled agents
@@ -247,7 +287,13 @@ function hubHeartbeat(agent) {
 const staleErrors = new Map(); // agent → consecutive error count
 
 async function watchAgents(pollMs = 2000) {
+  let lastSweep = Date.now();
+  sweepInactive();
   for (;;) {
+    if (Date.now() - lastSweep > SWEEP_INTERVAL_MS) {
+      sweepInactive();
+      lastSweep = Date.now();
+    }
     const registry = loadRegistry();
     for (const [agent, mapping] of Object.entries(registry)) {
       if (mapping.suspended) continue; // skip until re-registered
