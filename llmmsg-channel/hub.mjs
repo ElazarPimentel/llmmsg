@@ -101,7 +101,8 @@ for (const migration of [
      SELECT MIN(id) AS id, sender, MIN(recipient) AS recipient, MIN(tag) AS tag,
             re, body, retracted_at, origin_aro, ts
      FROM messages
-     GROUP BY sender, ts, body, origin_aro, re, retracted_at`,
+     GROUP BY sender, ts, body, COALESCE(re,''), COALESCE(retracted_at,0), origin_aro,
+              CASE WHEN origin_aro IS NULL THEN id ELSE 0 END`,
   `DROP VIEW IF EXISTS v_roster_online`,
   `CREATE VIEW v_roster_online AS
      SELECT agent, cwd, last_seen_at
