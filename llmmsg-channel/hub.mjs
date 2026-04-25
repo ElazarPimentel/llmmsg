@@ -7,7 +7,7 @@ import http from 'node:http';
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'node:fs';
 
-const VERSION = '5.2';
+const VERSION = '5.3';
 const LENGTH_NUDGE_THRESHOLD = 1500;
 const PORT = parseInt(process.env.LLMMSG_HUB_PORT || '9701');
 const BIND_ADDR = process.env.LLMMSG_HUB_BIND || '127.0.0.1';
@@ -112,6 +112,24 @@ for (const migration of [
    )`,
   `CREATE INDEX IF NOT EXISTS idx_opinion_requests_open
      ON opinion_requests(status, deadline_at) WHERE status='open'`,
+  // Phase 2b: per-replier tracking. request_tag links every fanout message
+  // back to its parent opinion_request so /send can detect replies via the
+  // received message's tag. opinion_replies records each expected agent's
+  // state (pending → replied | skipped_offline | timed_out) — enables
+  // close_policy='all_expected' to close as 'closed:complete' the moment
+  // every expected agent has a terminal state.
+  `ALTER TABLE messages ADD COLUMN request_tag TEXT`,
+  `CREATE INDEX IF NOT EXISTS idx_messages_request_tag
+     ON messages(request_tag) WHERE request_tag IS NOT NULL`,
+  `CREATE TABLE IF NOT EXISTS opinion_replies (
+     request_tag TEXT NOT NULL,
+     agent       TEXT NOT NULL,
+     status      TEXT NOT NULL,
+     ts          INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+     PRIMARY KEY (request_tag, agent)
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_opinion_replies_request
+     ON opinion_replies(request_tag)`,
   // Views: DROP + CREATE on every start so definition changes propagate
   // without a separate migration step. Keep their SQL as the single source
   // of truth for fan-out collapse and online membership.
@@ -346,7 +364,28 @@ const stmtCloseExpired = db.prepare(
   `UPDATE opinion_requests
    SET status = 'closed:incomplete', closed_at = strftime('%s','now'), closed_reason = 'deadline'
    WHERE status = 'open' AND deadline_at < strftime('%s','now')
-   RETURNING tag, aro, sender, expected_repliers`
+   RETURNING tag, aro, sender, expected_repliers, close_policy`
+);
+const stmtSetRequestTag = db.prepare(`UPDATE messages SET request_tag = ? WHERE id = ?`);
+const stmtUpsertOpinionReply = db.prepare(
+  `INSERT INTO opinion_replies (request_tag, agent, status, ts)
+   VALUES (?, ?, ?, strftime('%s','now'))
+   ON CONFLICT(request_tag, agent) DO UPDATE SET status = excluded.status, ts = excluded.ts`
+);
+const stmtListOpinionReplies = db.prepare(
+  `SELECT agent, status FROM opinion_replies WHERE request_tag = ? ORDER BY agent`
+);
+const stmtGetOpenRequestForReplyTag = db.prepare(
+  `SELECT oreq.tag, oreq.aro, oreq.sender, oreq.expected_repliers, oreq.close_policy
+   FROM opinion_requests oreq
+   JOIN messages m ON m.request_tag = oreq.tag
+   WHERE m.tag = ? AND oreq.status = 'open'
+   LIMIT 1`
+);
+const stmtCloseRequestComplete = db.prepare(
+  `UPDATE opinion_requests
+   SET status = 'closed:complete', closed_at = strftime('%s','now'), closed_reason = 'all_expected'
+   WHERE tag = ? AND status = 'open'`
 );
 
 // --- Multi-site: remote hub forwarding ---
@@ -491,33 +530,48 @@ setInterval(() => {
 }, ROSTER_SWEEP_INTERVAL_MS);
 
 // Opinion-request deadline closer. Every 30s, find open opinion_requests
-// whose deadline has elapsed, close them as 'closed:incomplete', and emit a
-// system message to the originating ARO so all members see the close.
+// whose deadline has elapsed, mark any 'pending' replies as 'timed_out',
+// close the request as 'closed:incomplete', and emit a system message to the
+// originating ARO with the full per-agent state. close_policy='manual' is
+// reserved for an explicit close API and is treated as deadline here so a
+// forgotten manual request still cleans up. close_policy='all_expected' that
+// did not reach completion in time also closes as incomplete.
 const OPINION_DEADLINE_CHECK_MS = 30 * 1000;
 setInterval(() => {
   try {
     const expired = stmtCloseExpired.all();
     for (const row of expired) {
-      let expectedList = [];
-      try { expectedList = JSON.parse(row.expected_repliers || '[]'); } catch {}
-      const expectedStr = expectedList.length ? expectedList.join(',') : '<none>';
+      // Mark any 'pending' replies as timed_out so the per-agent record is
+      // accurate. Replies / skipped_offline statuses are preserved.
+      try {
+        const pending = stmtListOpinionReplies.all(row.tag).filter(r => r.status === 'pending');
+        for (const p of pending) {
+          stmtUpsertOpinionReply.run(row.tag, p.agent, 'timed_out');
+        }
+      } catch (markErr) {
+        console.error(`[opinion-deadline] mark timed_out failed for ${row.tag}: ${markErr.message}`);
+      }
+
+      // Build a per-agent summary line for the notice.
+      let summary = '<no replies recorded>';
+      try {
+        const replies = stmtListOpinionReplies.all(row.tag);
+        if (replies.length > 0) {
+          summary = replies.map(r => `${r.agent}:${r.status}`).join(', ');
+        }
+      } catch {}
+
       const notice =
         `[opinion-request closed:incomplete] tag=${row.tag} aro:${row.aro} sender=${row.sender} ` +
-        `expected=[${expectedStr}] reason=deadline. The request stalled past its deadline; ` +
+        `replies=[${summary}] reason=deadline. The request stalled past its deadline; ` +
         `requester should proceed with the opinions received or reissue with a new deadline.`;
       try {
-        sendMessage('system', `aro:${row.aro}`, null, notice, `aro:${row.aro}`);
-      } catch (sendErr) {
-        // sendMessage signature expects a recipient agent, not aro:X. Fall
-        // back: fan out manually to current ARO members.
-        try {
-          const members = activeAroMembers(row.aro, 'system');
-          for (const m of members) {
-            sendMessage('system', m, null, notice, `aro:${row.aro}`);
-          }
-        } catch (fanErr) {
-          console.error(`[opinion-deadline] notice fanout failed for ${row.tag}: ${fanErr.message}`);
+        const members = activeAroMembers(row.aro, 'system');
+        for (const m of members) {
+          sendMessage('system', m, null, notice, `aro:${row.aro}`);
         }
+      } catch (fanErr) {
+        console.error(`[opinion-deadline] notice fanout failed for ${row.tag}: ${fanErr.message}`);
       }
       console.log(`[opinion-deadline] closed ${row.tag} (aro:${row.aro}, sender=${row.sender})`);
     }
@@ -1044,17 +1098,27 @@ const server = http.createServer(async (req, res) => {
         const members = activeAroMembers(aroName, from);
         const results = members.map(member => sendMessage(from, member, re || null, msgBody, originAro));
 
-        // Opinion-request lifecycle: when sender flags expects_replies, snapshot
-        // the wheel and a deadline. The deadline timer auto-closes the request
-        // as 'closed:incomplete' so opinion threads cannot stall forever.
-        // Reply tracking + 'all_expected' close policy land in Phase 2b.
+        // Opinion-request lifecycle (Phase 2a + 2b). When sender flags
+        // expects_replies, the hub:
+        //   1. Records an opinion_requests row keyed by results[0].tag.
+        //   2. Stamps request_tag = results[0].tag on every fanout message
+        //      so /send can correlate replies by their `re` tag.
+        //   3. Pre-populates opinion_replies with status='pending' for each
+        //      expected agent that is currently in the active wheel, and
+        //      status='skipped_offline' for each expected agent that is not.
+        //   4. Posts a single system notice to the ARO listing skipped_offline
+        //      agents (if any) so members see who was already gone at request
+        //      time and the wheel is not waiting on them.
+        // close_policy='all_expected' closes the request as 'closed:complete'
+        // the moment every expected agent has a terminal state (replied or
+        // skipped_offline). 'deadline' (default) lets the deadline timer
+        // close as 'closed:incomplete' if not yet complete.
         if (expects_replies !== undefined && expects_replies !== false && results.length > 0) {
           try {
             let expected;
             if (Array.isArray(expects_replies)) {
               expected = expects_replies.filter(a => typeof a === 'string' && a !== from);
             } else {
-              // expects_replies === true or any truthy value: snapshot online members
               expected = members.slice();
             }
             const deadlineMs = Number.isFinite(reply_deadline_ms)
@@ -1062,16 +1126,92 @@ const server = http.createServer(async (req, res) => {
               : 15 * 60 * 1000;
             const deadlineAt = Math.floor(Date.now() / 1000) + Math.floor(deadlineMs / 1000);
             const policy = (close_policy === 'all_expected' || close_policy === 'manual') ? close_policy : 'deadline';
+            const requestTag = results[0].tag;
+
             stmtInsertOpinionRequest.run(
-              results[0].tag,
+              requestTag,
               aroName,
               from,
               JSON.stringify(expected),
               deadlineAt,
               policy
             );
+
+            // Stamp request_tag on every fanout message row so reply detection
+            // (in /send below) can map `re=<received-tag>` → request_tag.
+            for (const r of results) {
+              stmtSetRequestTag.run(requestTag, r.id);
+            }
+
+            // Pre-populate per-replier states. members[] is the active wheel
+            // for this ARO at fanout time; anyone in `expected` who is not in
+            // members[] is already offline and gets skipped_offline.
+            const memberSet = new Set(members);
+            const skipped = [];
+            for (const agent of expected) {
+              const status = memberSet.has(agent) ? 'pending' : 'skipped_offline';
+              stmtUpsertOpinionReply.run(requestTag, agent, status);
+              if (status === 'skipped_offline') skipped.push(agent);
+            }
+
+            // Notify the ARO when expected agents were already offline so the
+            // wheel does not silently stall on them. One notice per request,
+            // fanned to current members.
+            if (skipped.length > 0) {
+              const notice =
+                `[opinion-request skipped_offline] tag=${requestTag} aro:${aroName} sender=${from} ` +
+                `skipped=[${skipped.join(',')}] reason=offline_at_request_time. ` +
+                `These agents will not block close; remaining wheel: ` +
+                `[${expected.filter(a => !skipped.includes(a)).join(',') || '<none>'}].`;
+              try {
+                for (const m of members) {
+                  sendMessage('system', m, null, notice, `aro:${aroName}`);
+                }
+              } catch (notifyErr) {
+                console.error(`[opinion-request] skipped_offline notice failed for ${requestTag}: ${notifyErr.message}`);
+              }
+            }
           } catch (err) {
             console.error(`[opinion-request] insert failed for ${from} on aro:${aroName}: ${err.message}`);
+          }
+        }
+
+        // Reply detection on ARO send: when this send has `re=<received-tag>`
+        // and that tag belongs to an open opinion_request, mark the sender as
+        // replied. If close_policy='all_expected' and every expected agent
+        // now has a terminal state, close the request as 'closed:complete'.
+        // (Reply detection lives outside the expects_replies block above
+        // because the original sender of the request is not the one replying.)
+        if (re && results.length > 0) {
+          try {
+            const openReq = stmtGetOpenRequestForReplyTag.get(re);
+            if (openReq && openReq.tag) {
+              stmtUpsertOpinionReply.run(openReq.tag, from, 'replied');
+              if (openReq.close_policy === 'all_expected') {
+                const replies = stmtListOpinionReplies.all(openReq.tag);
+                const allTerminal = replies.length > 0
+                  && replies.every(r => r.status === 'replied' || r.status === 'skipped_offline');
+                if (allTerminal) {
+                  stmtCloseRequestComplete.run(openReq.tag);
+                  const summary = replies.map(r => `${r.agent}:${r.status}`).join(', ');
+                  const notice =
+                    `[opinion-request closed:complete] tag=${openReq.tag} aro:${openReq.aro} ` +
+                    `sender=${openReq.sender} reason=all_expected ` +
+                    `replies=[${summary}]. All expected agents accounted for; thread complete.`;
+                  try {
+                    const aroMembers = activeAroMembers(openReq.aro, 'system');
+                    for (const m of aroMembers) {
+                      sendMessage('system', m, null, notice, `aro:${openReq.aro}`);
+                    }
+                  } catch (notifyErr) {
+                    console.error(`[opinion-reply] complete notice failed for ${openReq.tag}: ${notifyErr.message}`);
+                  }
+                  console.log(`[opinion-reply] closed:complete ${openReq.tag} (aro:${openReq.aro}, sender=${openReq.sender})`);
+                }
+              }
+            }
+          } catch (err) {
+            console.error(`[opinion-reply] detect failed for ${from} re=${re}: ${err.message}`);
           }
         }
 

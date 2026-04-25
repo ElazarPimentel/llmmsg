@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION="2.7"
+VERSION="2.8"
 echo "init-db.sh v$VERSION"
 
 DB="${LLMMSG_DB:-/opt/llmmsg/db/llmmsg.sqlite}"
@@ -24,6 +24,9 @@ PRAGMA busy_timeout=5000;
 -- retracted_at    INTEGER unix epoch or NULL
 -- origin_tag      cross-site dedup (nullable, partial-indexed)
 -- origin_aro      'aro:<name>' when this row is part of an ARO fan-out
+-- request_tag     opinion_requests.tag when this row is part of a Phase 2b
+--                 opinion-request fan-out; lets /send map a reply (re=<tag>)
+--                 back to its parent request without scanning.
 CREATE TABLE messages (
     id           INTEGER PRIMARY KEY AUTOINCREMENT,
     ts           INTEGER NOT NULL DEFAULT (strftime('%s','now')),
@@ -35,7 +38,8 @@ CREATE TABLE messages (
     retracted_at INTEGER,
     retracted_by TEXT,
     origin_tag   TEXT,
-    origin_aro   TEXT
+    origin_aro   TEXT,
+    request_tag  TEXT
 );
 
 CREATE TABLE cursors (
@@ -103,10 +107,14 @@ CREATE TABLE guide_delivered (
     guide_version TEXT NOT NULL
 );
 
--- ARO opinion-request lifecycle (Phase 2a: deadline-driven auto-close).
--- Hub captures expected_repliers + deadline at /send time when sender flags
--- expects_replies. A 30s timer closes expired open requests as
--- 'closed:incomplete' and emits a system message to the originating ARO.
+-- ARO opinion-request lifecycle.
+-- Phase 2a: deadline-driven auto-close. Hub captures expected_repliers +
+-- deadline at /send time when sender flags expects_replies. A 30s timer
+-- closes expired open requests as 'closed:incomplete' and emits a system
+-- message to the originating ARO.
+-- Phase 2b: per-replier tracking via opinion_replies + messages.request_tag
+-- mapping. Enables close_policy='all_expected' (close as 'closed:complete'
+-- once every expected agent has replied or was skipped_offline).
 CREATE TABLE opinion_requests (
     tag               TEXT PRIMARY KEY,
     aro               TEXT NOT NULL,
@@ -120,12 +128,22 @@ CREATE TABLE opinion_requests (
     closed_reason     TEXT
 );
 
-CREATE INDEX idx_recv                ON messages(recipient, id);
-CREATE INDEX idx_origin_tag          ON messages(origin_tag) WHERE origin_tag IS NOT NULL;
-CREATE INDEX idx_origin_aro          ON messages(origin_aro) WHERE origin_aro IS NOT NULL;
-CREATE INDEX idx_roster_seen         ON roster(last_seen_at);
-CREATE INDEX idx_hub_log_ts          ON hub_log(ts);
+CREATE TABLE opinion_replies (
+    request_tag TEXT NOT NULL,
+    agent       TEXT NOT NULL,
+    status      TEXT NOT NULL,
+    ts          INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+    PRIMARY KEY (request_tag, agent)
+);
+
+CREATE INDEX idx_recv                  ON messages(recipient, id);
+CREATE INDEX idx_origin_tag            ON messages(origin_tag) WHERE origin_tag IS NOT NULL;
+CREATE INDEX idx_origin_aro            ON messages(origin_aro) WHERE origin_aro IS NOT NULL;
+CREATE INDEX idx_messages_request_tag  ON messages(request_tag) WHERE request_tag IS NOT NULL;
+CREATE INDEX idx_roster_seen           ON roster(last_seen_at);
+CREATE INDEX idx_hub_log_ts            ON hub_log(ts);
 CREATE INDEX idx_opinion_requests_open ON opinion_requests(status, deadline_at) WHERE status='open';
+CREATE INDEX idx_opinion_replies_request ON opinion_replies(request_tag);
 
 -- Seed message guide
 INSERT INTO config (key, value, version) VALUES ('message_guide',
