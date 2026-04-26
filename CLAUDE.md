@@ -9,7 +9,7 @@ Before editing anything, read **[ECOSYSTEM.md](./ECOSYSTEM.md)** — it is the c
 **Critical prerequisites for this host:**
 - `/etc/llmmsg/site.conf` MUST exist. Hub and launchers hard-error if missing. Templates in `config-templates/site.conf.{whey,lezama}`. Install once per host with `sudo install -m 0644 -o root -g root config-templates/site.conf.<hostname> /etc/llmmsg/site.conf`.
 - Launcher source of truth is `~/Documents/terminal/sh/` (separate repo `ElazarPimentel/sh`). `/opt/llmmsg/launchers/` is a real symlink mirror into that repo — never edit via the mirror path.
-- Shared launcher helper at `scripts/lib/resolve-agent-name.sh` is sourced by ccs.sh, ccsn.sh, cf.sh, cfn.sh to load site config and resolve/validate the agent label. Do not duplicate that logic in new launchers.
+- Shared launcher helper at `scripts/lib/resolve-agent-name.sh` is sourced by ccs.sh, ccnewnohistory.sh, cf.sh, cffresh.sh to load site config and resolve/validate the agent label. Do not duplicate that logic in new launchers.
 
 ## Project Overview
 

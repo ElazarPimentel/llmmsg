@@ -1,6 +1,6 @@
 # llmmsg-ecosystem
 # resolve-agent-name.sh - shared launcher helper for agent name resolution.
-# Sourced by ccs.sh, ccsn.sh, cf.sh, cfn.sh.
+# Sourced by ccs.sh, ccnewnohistory.sh, cf.sh, cffresh.sh.
 # See /opt/llmmsg/ECOSYSTEM.md
 #
 # Exports no variables by itself. Provides functions:

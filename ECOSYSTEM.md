@@ -54,10 +54,10 @@ Conceptually: sessions → launcher scripts → MCP channel server → hub → S
 | Script | Classification | Role |
 |---|---|---|
 | `ccs.sh` | full member | CC continue-or-fresh launcher, sets llmmsg env, passes push flag |
-| `ccsn.sh` | full member | CC fresh-only launcher, passes push flag |
+| `ccnewnohistory.sh` | full member | CC fresh-only launcher, passes push flag |
 | `cf.sh` | full member | Codex remote launcher, bridge register, thread map, preflight cwd |
-| `cfn.sh` | partial member | Codex fresh-only launcher, sets LLMMSG_AGENT but no bridge coupling. **Limitation:** inbound delivery is not wired — fresh cfn sessions can send but will not receive pushed messages until registered via a full member (e.g. `cf.sh`). |
-| `cfl.sh` | minimal member | Minimal Codex resume-last bypass (no bridge, no thread map) |
+| `cffresh.sh` | partial member | Codex fresh-only launcher, sets LLMMSG_AGENT but no bridge coupling. **Limitation:** inbound delivery is not wired — fresh cffresh sessions can send but will not receive pushed messages until registered via a full member (e.g. `cf.sh`). |
+| `cfresume.sh` | minimal member | Minimal Codex resume-last bypass (no bridge, no thread map) |
 | `ccs-tmux.sh` | thin member | Spawns a tmux session running `ccs` |
 | `cf-tmux.sh` | thin member | Spawns a tmux session running `cf` |
 | `cfsa.sh` (`cfstandalone.sh` symlink) | **non-member** | Isolated local `.codex/` session. Listed here for discoverability; see Out of Scope. |
@@ -147,8 +147,8 @@ remote hub /inbound ── POST over SSH tunnel ──► remote SQLite
 | `/opt/llmmsg/db/llmmsg.sqlite` | hub | Messages (with origin_tag), cursors (read_id only), roster, aros, config, outbox |
 | `/opt/llmmsg/codex-llmmsg-app/registrations.json` | bridge | Agent → (threadId, cwd, suspended) binding. **Not tracked in git.** |
 | `/opt/llmmsg/codex-llmmsg-app/bridge-state.sqlite` | bridge | `delivery_cursor` tracking last-delivered id per Codex agent. Separate from main DB for bridge write-isolation. |
-| `<cwd>/.agent-name-cc` | CC launchers | Per-project CC agent name (ccs.sh, ccsn.sh). Auto-created on first ccs launch. |
-| `<cwd>/.agent-name-ca` | Codex launchers | Per-project Codex agent name (cf.sh, cfn.sh). Auto-created on first cf launch. |
+| `<cwd>/.agent-name-cc` | CC launchers | Per-project CC agent name (ccs.sh, ccnewnohistory.sh). Auto-created on first ccs launch. |
+| `<cwd>/.agent-name-ca` | Codex launchers | Per-project Codex agent name (cf.sh, cffresh.sh). Auto-created on first cf launch. |
 | `<cwd>/.agent-name` | legacy | Deprecated pre-split unified agent name file. Launchers hard-error if present and print a migration command to create `.agent-name-cc` or `.agent-name-ca`. |
 | `~/.codex/state_5.sqlite` | Codex | Thread history DB (used by cf.sh for bootstrap thread lookup) |
 | `~/.claude.json` | Claude Code | MCP config (`mcpServers.llmmsg-channel` entry) |
