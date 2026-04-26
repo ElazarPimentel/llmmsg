@@ -4,7 +4,9 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { CodexRpcClient } from './rpc-client.mjs';
 
-const VERSION = '1.3';
+const VERSION = '1.4';
+
+import { execSync } from 'node:child_process';
 
 const APP_DIR = path.dirname(new URL(import.meta.url).pathname);
 const REGISTRY_PATH = path.join(APP_DIR, 'registrations.json');
@@ -17,6 +19,13 @@ const APP_SERVER_URL = process.env.CODEX_APP_SERVER_URL || 'ws://127.0.0.1:8788'
 // active and suspended entries. Override with LLMMSG_BRIDGE_TTL_MS for tests.
 const INACTIVITY_TTL_MS = parseInt(process.env.LLMMSG_BRIDGE_TTL_MS || `${24 * 60 * 60 * 1000}`, 10);
 const SWEEP_INTERVAL_MS = 60 * 60 * 1000; // 1h
+
+// Orphan detector: every 5min, scan running codex CLIs and archive +
+// unregister any registration whose agent has no attached CLI. Honors a
+// grace window (ORPHAN_GRACE_MS) so a registration created moments ago by
+// cf.sh isn't reaped before its CLI process is fully visible to ps.
+const ORPHAN_SCAN_INTERVAL_MS = 5 * 60 * 1000;
+const ORPHAN_GRACE_MS = 2 * 60 * 1000;
 
 fs.mkdirSync(APP_DIR, { recursive: true });
 
@@ -245,6 +254,97 @@ async function deliverUnread(agent) {
   return { delivered: rows.length, cursorId: maxId };
 }
 
+// Archive a thread on the codex-app-server. Best-effort: if the thread is
+// already gone or the server doesn't recognize it, we still proceed.
+async function archiveThread(threadId) {
+  if (!threadId) return false;
+  const client = new CodexRpcClient({ url: APP_SERVER_URL });
+  try {
+    await client.connect();
+    await client.request('thread/archive', { threadId });
+    return true;
+  } catch (err) {
+    if (!isThreadGoneError(err)) {
+      process.stderr.write(`[archive] ${threadId}: ${err.message}\n`);
+    }
+    return false;
+  } finally {
+    await client.close().catch(() => {});
+  }
+}
+
+// Notify the hub to drop the agent from roster + aros. Best-effort.
+function hubUnregister(agent) {
+  return new Promise((resolve) => {
+    const data = JSON.stringify({ agent });
+    const req = http.request(`${HUB_URL}/unregister`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+    }, (res) => { res.resume(); resolve(); });
+    req.on('error', () => resolve());
+    req.end(data);
+  });
+}
+
+// Inspect running codex CLI processes. Returns the set of agent labels
+// found in argv ("Your agent name is X.") and the set of threadIds found
+// in argv ("codex resume <uuid>"). Either match counts as "attached".
+function listAttachedSessions() {
+  const attachedAgents = new Set();
+  const attachedThreads = new Set();
+  let psOut = '';
+  try {
+    psOut = execSync('ps -eo args --no-headers', { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
+  } catch {
+    return { attachedAgents, attachedThreads };
+  }
+  for (const line of psOut.split('\n')) {
+    if (!/\bcodex\b/.test(line) || !/--remote\b/.test(line)) continue;
+    const nameMatch = line.match(/Your agent name is ([A-Za-z0-9_.-]+)/);
+    if (nameMatch) attachedAgents.add(nameMatch[1].toLowerCase());
+    const tidMatch = line.match(/\bresume\s+([0-9a-f-]{36})/);
+    if (tidMatch) attachedThreads.add(tidMatch[1]);
+  }
+  return { attachedAgents, attachedThreads };
+}
+
+// Orphan sweep: archive + unregister registrations whose agent has no
+// attached CLI process. Skips entries within ORPHAN_GRACE_MS of registration
+// to avoid racing cf.sh's launch sequence. Suspended entries are considered
+// orphans-by-definition and pass through to inactivity TTL.
+async function sweepOrphans() {
+  const registry = loadRegistry();
+  const { attachedAgents, attachedThreads } = listAttachedSessions();
+  const now = Date.now();
+  const toRemove = [];
+  for (const [agent, mapping] of Object.entries(registry)) {
+    if (mapping.suspended) continue;
+    const regAt = Date.parse(mapping.registeredAt || '');
+    if (Number.isFinite(regAt) && now - regAt < ORPHAN_GRACE_MS) continue;
+    const lastAt = Date.parse(mapping.lastActivityAt || mapping.registeredAt || '');
+    if (Number.isFinite(lastAt) && now - lastAt < ORPHAN_GRACE_MS) continue;
+    const hasAgentCli = attachedAgents.has(agent.toLowerCase());
+    const hasThreadCli = mapping.threadId && attachedThreads.has(mapping.threadId);
+    if (!hasAgentCli && !hasThreadCli) {
+      toRemove.push({ agent, threadId: mapping.threadId });
+    }
+  }
+  if (!toRemove.length) return;
+  for (const { agent, threadId } of toRemove) {
+    await archiveThread(threadId);
+  }
+  // Re-read registry to avoid clobbering parallel writes (deliverUnread sets lastActivityAt).
+  const reg = loadRegistry();
+  for (const { agent } of toRemove) {
+    delete reg[agent];
+  }
+  saveRegistry(reg);
+  for (const { agent, threadId } of toRemove) {
+    process.stdout.write(`[orphan-sweep] archived ${agent} (thread ${threadId}) — no attached CLI\n`);
+    await hubUnregister(agent);
+  }
+}
+
 // Reap registrations that have shown no activity for INACTIVITY_TTL_MS.
 // "Activity" = lastActivityAt (set on delivery) OR registeredAt (the act of
 // (re-)registering counts). Applies to suspended entries too — if a session
@@ -288,11 +388,19 @@ const staleErrors = new Map(); // agent → consecutive error count
 
 async function watchAgents(pollMs = 2000) {
   let lastSweep = Date.now();
+  let lastOrphanScan = Date.now();
   sweepInactive();
+  // Initial orphan scan deferred to first interval — startup race.
   for (;;) {
     if (Date.now() - lastSweep > SWEEP_INTERVAL_MS) {
       sweepInactive();
       lastSweep = Date.now();
+    }
+    if (Date.now() - lastOrphanScan > ORPHAN_SCAN_INTERVAL_MS) {
+      try { await sweepOrphans(); } catch (err) {
+        process.stderr.write(`[orphan-sweep] error: ${err.message}\n`);
+      }
+      lastOrphanScan = Date.now();
     }
     const registry = loadRegistry();
     for (const [agent, mapping] of Object.entries(registry)) {
@@ -375,6 +483,33 @@ async function main() {
     return;
   }
 
+  if (command === 'archive') {
+    // Archive the codex thread and remove the bridge registration. Used by
+    // cf.sh's exit trap so a CLI session cannot leave a thread loaded
+    // server-side after it exits. agent OR --thread-id must be supplied.
+    const agent = args[0];
+    const tidIdx = args.indexOf('--thread-id');
+    let threadId = tidIdx >= 0 ? args[tidIdx + 1] : null;
+    const registry = loadRegistry();
+    if (!threadId && agent) {
+      threadId = registry[agent]?.threadId || null;
+    }
+    if (!threadId) {
+      console.error('archive requires --thread-id or a known agent');
+      process.exit(1);
+    }
+    const archived = await archiveThread(threadId);
+    let removed = false;
+    if (agent && registry[agent]) {
+      delete registry[agent];
+      saveRegistry(registry);
+      removed = true;
+      await hubUnregister(agent);
+    }
+    console.log(JSON.stringify({ ok: true, agent: agent || null, threadId, archived, registry_removed: removed }));
+    return;
+  }
+
   if (command === 'is-suspended') {
     const agent = args[0];
     if (!agent) {
@@ -389,7 +524,7 @@ async function main() {
     return;
   }
 
-  console.error('Usage: bridge.mjs register <agent> [--thread-id <id> | --cwd <cwd>] | deliver <agent> | watch [--poll-ms N] | list | unregister <agent> | is-suspended <agent>');
+  console.error('Usage: bridge.mjs register <agent> [--thread-id <id> | --cwd <cwd>] | deliver <agent> | watch [--poll-ms N] | list | unregister <agent> | is-suspended <agent> | archive <agent> [--thread-id <id>]');
   process.exit(1);
 }
 
